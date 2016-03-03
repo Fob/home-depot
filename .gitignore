@@ -1,3 +1,5 @@
-result/*
+#result/*
 dataset/*.csv
 .idea/*
+*.pyc
+.DS_Store
