@@ -20,12 +20,6 @@ def get_all_in_one_feature_matrix_with_stemming(vect='cnt'):
     train_df = ext_ft.combine_all_info(train_data, descr_by_prod, attrs_by_prod)
     test_df = ext_ft.combine_all_info(test_data, descr_by_prod, attrs_by_prod)
 
-    # remove non-alphanumeric values
-    train_df['info'] = train_df['info'].str.replace(r'[^A-Za-z\d\s]+', ' ')
-    train_df['info'] = train_df['info'].str.replace(r'\s+', ' ')
-    test_df['info'] = test_df['info'].str.replace(r'[^A-Za-z\d\s]+', ' ')
-    test_df['info'] = test_df['info'].str.replace(r'\s+', ' ')
-
     train_df['info'] = [stemming_row(row_info) for row_info in train_df['info']]
     train_df['search_term'] = [stemming_row(row_info) for row_info in train_df['search_term']]
     test_df['info'] = [stemming_row(row_info) for row_info in test_df['info']]
