@@ -41,3 +41,6 @@ clf = RandomForestRegressor()
 score = run_cv(clf, X.tocsc()[0:5000,:], y[0:5000])
 score = run_cv(clf, X, y)
 '''
+
+
+X_train, y_train, X_test = ext_ft.get_all_in_one_feature_matrix(vect='tfidf')

@@ -3,6 +3,9 @@ import numbers
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from scipy.sparse import hstack
+from nltk import word_tokenize
+from nltk.stem.snowball import SnowballStemmer
+import datetime
 
 
 def make_string(s):
@@ -32,19 +35,35 @@ def combine_all_info(data, descr_by_prod, attrs_by_prod):
 
 
 def get_all_in_one_feature_matrix(vect='cnt'):
+    start_time = datetime.datetime.now()
+
     train_data = pd.read_csv('./dataset/train.csv')
     test_data = pd.read_csv('./dataset/test.csv')
     descr_by_prod = descr_by_product()
     attrs_by_prod = attrs_by_product()
 
-    train_df = combine_all_info(train_data, descr_by_prod, attrs_by_prod)
-    test_df = combine_all_info(test_data, descr_by_prod, attrs_by_prod)
+    print 'Data loaded'
+
+    numtrain = train_data.shape[0]
+    data = pd.concat([train_data, test_data], axis=0, ignore_index=True)
+
+    df = combine_all_info(data, descr_by_prod, attrs_by_prod)
+
+    print 'Combined into one column'
+
+    stemmer = SnowballStemmer('english')
 
     # remove non-alphanumeric values
-    train_df['info'] = train_df['info'].str.replace(r'[^A-Za-z\d\s]+', ' ')
-    train_df['info'] = train_df['info'].str.replace(r'\s+', ' ')
-    test_df['info'] = test_df['info'].str.replace(r'[^A-Za-z\d\s]+', ' ')
-    test_df['info'] = test_df['info'].str.replace(r'\s+', ' ')
+    df['info'] = df['info'].str.replace(r'[^A-Za-z\d\s]+', ' ')
+    print 'Non-alphanumeric removed'
+    df['info'] = df['info'].str.replace(r'\s+', ' ')
+    print 'Spaces trimmed'
+    df['info'] = df['info'].str.replace(r'([a-z])([A-Z])', '\g<1> \g<2>')
+    print 'CamelCase removed'
+    df['info'] = df['info'].str.lower()
+    print 'To lower done'
+    df['info'] = df['info'].apply(lambda val: ' '.join([stemmer.stem(i) for i in word_tokenize(val)]))
+    print 'Stemmed'
 
     if vect == 'cnt':
         info_vectorizer = CountVectorizer()
@@ -53,11 +72,17 @@ def get_all_in_one_feature_matrix(vect='cnt'):
         info_vectorizer = TfidfVectorizer()
         st_vectorizer = TfidfVectorizer()
 
-    info_vectorizer.fit(pd.concat([train_df['info'], test_df['info']], axis=0))
-    st_vectorizer.fit(pd.concat([train_df['search_term'], test_df['search_term']], axis=0))
+    info = info_vectorizer.fit_transform(df['info'])
+    print 'Info vectorized'
+    search_term = st_vectorizer.fit_transform(df['search_term'])
+    print 'Search term vectorized'
 
-    X_train = hstack([info_vectorizer.transform(train_df['info']), st_vectorizer.transform(train_df['search_term'])])
-    y_train = train_df['relevance']
-    X_test = hstack([info_vectorizer.transform(test_df['info']), st_vectorizer.transform(test_df['search_term'])])
+    X = hstack([info, search_term])
+    X_train = X.tocsc()[:numtrain,:]
+    X_test = X.tocsc()[numtrain:,:]
+
+    y_train = df.ix[:(numtrain-1), 'relevance']
+
+    print 'Time = %s' % (datetime.datetime.now() - start_time)
 
     return X_train, y_train, X_test
