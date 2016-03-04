@@ -6,6 +6,7 @@ from scipy.sparse import hstack
 from nltk import word_tokenize
 from nltk.stem.snowball import SnowballStemmer
 import datetime
+from nltk.corpus import stopwords
 
 
 def make_string(s):
@@ -62,7 +63,8 @@ def get_all_in_one_feature_matrix(vect='cnt'):
     print 'CamelCase removed'
     df['info'] = df['info'].str.lower()
     print 'To lower done'
-    df['info'] = df['info'].apply(lambda val: ' '.join([stemmer.stem(i) for i in word_tokenize(val)]))
+    stop = stopwords.words('english')
+    df['info'] = df['info'].apply(lambda val: ' '.join([stemmer.stem(i) for i in word_tokenize(val) if i not in stop]))
     print 'Stemmed'
 
     if vect == 'cnt':
