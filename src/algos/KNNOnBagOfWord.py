@@ -20,13 +20,6 @@ y=data['relevance']
 print X.shape
 print y.shape
 
-
-#knn = KNeighborsRegressor(n_neighbors=5)
-#knn.fit(X.tocsc()[:1000,:], np.array(y[:1000]))
-#y_predict = knn.predict(np.array(X.tocsc()[1000:2000,:].todense()))
-#np.sqrt(np.sum((y_predict - y[1000:2000])**2)/len(y_predict))
-
-
 X = X.tocsc()[:50000,:]
 y = y[:50000]
 

@@ -34,6 +34,43 @@ def combine_all_info(data, descr_by_prod, attrs_by_prod):
     data = data.drop(['product_title', 'descr', 'attrs'], axis=1)
     return data
 
+def create_and_save_all_in_one_feature_matrix_with_stemming(type='train'):
+    start_time = datetime.datetime.now()
+
+    if type == 'train':
+        data = pd.read_csv('./dataset/train.csv')
+        filename = './dataset/train_all_info_with_stemming.csv'
+    else:
+        data = pd.read_csv('./dataset/test.csv')
+        filename = './dataset/test_all_info_with_stemming.csv'
+
+    descr_by_prod = descr_by_product()
+    attrs_by_prod = attrs_by_product()
+    print 'Data loaded'
+
+    df = combine_all_info(data, descr_by_prod, attrs_by_prod)
+    print 'Combined into one column'
+
+    stemmer = SnowballStemmer('english')
+
+    # remove non-alphanumeric values
+    df['info'] = df['info'].str.replace(r'[^A-Za-z\d\s]+', ' ')
+    print 'Non-alphanumeric removed'
+    df['info'] = df['info'].str.replace(r'\s+', ' ')
+    print 'Spaces trimmed'
+    df['info'] = df['info'].str.replace(r'([a-z])([A-Z])', '\g<1> \g<2>')
+    print 'CamelCase removed'
+    df['info'] = df['info'].str.lower()
+    print 'To lower done'
+    stop = stopwords.words('english')
+    df['info'] = df['info'].apply(lambda val: ' '.join([stemmer.stem(i) for i in word_tokenize(val) if i not in stop]))
+    print 'Stemmed'
+
+    df.to_csv(filename, index=None)
+    print 'Saved to ' + filename
+
+    print 'Time = %s' % (datetime.datetime.now() - start_time)
+
 
 def get_all_in_one_feature_matrix(vect='cnt'):
     start_time = datetime.datetime.now()
