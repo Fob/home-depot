@@ -9,9 +9,7 @@ def stemming_row(row_string):
     from nltk import PorterStemmer
     return ' '.join([PorterStemmer().stem_word(s) for s in re.sub("[^A-Za-z-\s\(\)]", "", row_string).split()])
 
-
-
-def get_all_in_one_feature_matrix_with_stemming(vect='cnt'):
+def create_and_save_all_in_one_feature_matrix_with_stemming():
     train_data = pd.read_csv('./dataset/train.csv')
     test_data = pd.read_csv('./dataset/test.csv')
     descr_by_prod = ext_ft.descr_by_product()
@@ -24,6 +22,15 @@ def get_all_in_one_feature_matrix_with_stemming(vect='cnt'):
     train_df['search_term'] = [stemming_row(row_info) for row_info in train_df['search_term']]
     test_df['info'] = [stemming_row(row_info) for row_info in test_df['info']]
     test_df['search_term'] = [stemming_row(row_info) for row_info in test_df['search_term']]
+
+    train_df.to_csv('./dataset/train_all_info_with_stemming.csv', index=None)
+    test_df.to_csv('./dataset/test_all_info_with_stemming.csv', index=None)
+
+
+
+def get_all_in_one_feature_matrix_with_stemming(vect='cnt'):
+    train_df = pd.read_csv('./dataset/train_all_info_with_stemming.csv')
+    test_df = pd.read_csv('./dataset/test_all_info_with_stemming.csv')
 
     if vect == 'cnt':
         info_vectorizer = CountVectorizer()
