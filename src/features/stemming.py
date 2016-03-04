@@ -7,7 +7,10 @@ from scipy.sparse import hstack
 def stemming_row(row_string):
     import re
     from nltk import PorterStemmer
-    return ' '.join([PorterStemmer().stem_word(s) for s in re.sub("[^A-Za-z-\s\(\)]", "", row_string).split()])
+    from nltk.corpus import stopwords
+    stop = stopwords.words('english')
+    words = [w for w in re.sub("[^A-Za-z-\s\(\)]", "", row_string).split() if w not in stop]
+    return ' '.join([PorterStemmer().stem_word(s) for s in words])
 
 def create_and_save_all_in_one_feature_matrix_with_stemming():
     train_data = pd.read_csv('./dataset/train.csv')
@@ -25,7 +28,6 @@ def create_and_save_all_in_one_feature_matrix_with_stemming():
 
     train_df.to_csv('./dataset/train_all_info_with_stemming.csv', index=None)
     test_df.to_csv('./dataset/test_all_info_with_stemming.csv', index=None)
-
 
 
 def get_all_in_one_feature_matrix_with_stemming(vect='cnt'):
