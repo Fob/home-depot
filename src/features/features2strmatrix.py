@@ -2,10 +2,11 @@ import re
 
 import numpy as np
 import pandas as pd
+from nltk import PorterStemmer
+from nltk.corpus import stopwords
 from pandas import DataFrame
 
-false_words = {'of', 'a', 'the', 'from', 'into', 'and', 'or', 'in', 'to', 'with', '&', 'x', 'this',
-               '&amp;', 'in.', 'are'}
+stop_words = set(stopwords.words('english')) | {'', '&', 'x', '&amp;', 'in.'}
 
 
 def column_transformer(x, combine_sizes=True):
@@ -18,15 +19,18 @@ def column_transformer(x, combine_sizes=True):
     return c
 
 
-def value_transformer(c, v, skip_false_words=True):
+def value_transformer(c, v, skip_stop_words=True):
     v = str(v).lower()
-    av = set(re.split('[\s,]', v))
-    if skip_false_words:
-        av = av - false_words
+    v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
+    av = set(re.split('[\s,\)\(]', v))
+    if skip_stop_words:
+        av = av - stop_words
+    stemmer = PorterStemmer()
+    av = set([stemmer.stem(w) for w in av])
     return av
 
 
-def product2attrs(combine_sizes=True, skip_false_words=True):
+def product2attrs(combine_sizes=True, skip_stop_words=True):
     attrs = pd.read_csv('./dataset/attributes.csv')
     attrs = attrs[attrs['product_uid'] == attrs['product_uid']]
     descrs = pd.read_csv('./dataset/product_descriptions.csv')
@@ -44,7 +48,7 @@ def product2attrs(combine_sizes=True, skip_false_words=True):
     for index, row in attrs.iterrows():
         if index % 100000 == 0: print 'processed: ' + str(index)
         cc = column_transformer(row['name'], combine_sizes)
-        cv = value_transformer(cc, row['value'], skip_false_words)
+        cv = value_transformer(cc, row['value'], skip_stop_words)
         id = int(row['product_uid'])
         current = rs.at[id, cc]
         if type(current) is float:
@@ -58,7 +62,7 @@ def product2attrs(combine_sizes=True, skip_false_words=True):
         if index % 10000 == 0: print 'processed descr: ' + str(index)
         id = int(row['product_uid'])
         if id not in rs.index: continue
-        rs.at[id, 'full_descr'] = value_transformer('full_descr', row['product_description'], skip_false_words)
+        rs.at[id, 'full_descr'] = value_transformer('full_descr', row['product_description'], skip_stop_words)
 
     print 'result:' + str(rs.shape)
     return rs
@@ -70,8 +74,8 @@ def count_words(data, search):
     return len(data & search)
 
 
-def load_features(combine_sizes=True, skip_false_words=True):
-    p2a = product2attrs(combine_sizes, skip_false_words)
+def load_features(combine_sizes=True, skip_stop_words=True):
+    p2a = product2attrs(combine_sizes, skip_stop_words)
     train_data = pd.read_csv('./dataset/train.csv')
     y_train = train_data['relevance']
     id_train = train_data['id']
@@ -80,8 +84,8 @@ def load_features(combine_sizes=True, skip_false_words=True):
 
     for index, row in train_data.iterrows():
         if index % 10000 == 0: print 'processed train data: ' + str(index)
-        search_set = value_transformer('search_term', row['search_term'], skip_false_words)
-        product_title = value_transformer('product_title', row['search_term'], skip_false_words)
+        search_set = value_transformer('search_term', row['search_term'], skip_stop_words)
+        product_title = value_transformer('product_title', row['search_term'], skip_stop_words)
         id = int(row['product_uid'])
         attrs = p2a.loc[id]
         vals = attrs.apply(lambda d: count_words(d, search_set))
@@ -97,8 +101,8 @@ def load_features(combine_sizes=True, skip_false_words=True):
 
     for index, row in test_data.iterrows():
         if index % 10000 == 0: print 'processed test data: ' + str(index)
-        search_set = value_transformer('search_term', row['search_term'], skip_false_words)
-        product_title = value_transformer('product_title', row['search_term'], skip_false_words)
+        search_set = value_transformer('search_term', row['search_term'], skip_stop_words)
+        product_title = value_transformer('product_title', row['search_term'], skip_stop_words)
         id = int(row['product_uid'])
         attrs = p2a.loc[id]
         vals = attrs.apply(lambda d: count_words(d, search_set))
