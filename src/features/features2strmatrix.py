@@ -21,6 +21,7 @@ def column_transformer(x, combine_sizes=True):
 
 def value_transformer(c, v, skip_stop_words=True):
     v = str(v).lower()
+    v = v.decode('utf-8', 'ignore')
     v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
     av = set(re.split('[\s,\)\(]', v))
     if skip_stop_words:
@@ -112,3 +113,5 @@ def load_features(combine_sizes=True, skip_stop_words=True):
             X_test[index, -1] = count_words(product_title, search_set)
 
     return X_train, y_train, X_test, id_train, id_test
+
+# X_train, y_train, X_test, id_train, id_test = load_features()
