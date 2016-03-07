@@ -6,7 +6,7 @@ from nltk import PorterStemmer
 from nltk.corpus import stopwords
 from pandas import DataFrame
 
-stop_words = set(stopwords.words('english')) | {'', '&', 'x', '&amp;', 'in.'}
+stop_words = set(stopwords.words('english')) | {'', '&', 'x', '&amp;', 'ft'}
 
 
 def column_transformer(x, combine_sizes=True):
@@ -38,43 +38,44 @@ def product2attrs(product_to_trace=None, combine_sizes=True, skip_stop_words=Tru
     descrs = pd.read_csv('./dataset/product_descriptions.csv')
     descrs = descrs[descrs['product_uid'] == descrs['product_uid']]
 
-    print 'attributes: ' + str(attrs.shape)
+    print 'attributes:', attrs.shape
     colls = attrs['name'].apply(lambda c: column_transformer(c, combine_sizes)).unique()
-    print 'attributes columns: ' + str(len(colls))
+    print 'attributes columns:', len(colls)
 
+    # noinspection PyUnresolvedReferences
     product_ids = [int(x) for x in pd.concat([attrs['product_uid'], descrs['product_uid']]).unique()]
-    print 'unique ids: ' + str(len(product_ids))
+    print 'unique ids:', len(product_ids)
 
     rs = DataFrame(index=product_ids, columns=np.hstack((colls, 'full_descr')))
 
     for index, row in attrs.iterrows():
-        if index % 100000 == 0: print 'processed: ' + str(index)
+        if index % 100000 == 0: print 'processed:', index
         id = int(row['product_uid'])
         cc = column_transformer(row['name'], combine_sizes)
         is_trace_enabled = id in product_to_trace
 
-        if is_trace_enabled: print row['name'], ' ', id, '->', row['value']
+        if is_trace_enabled: print row['name'], id, '->', row['value']
         cv = value_transformer(cc, row['value'], skip_stop_words)
         current = rs.at[id, cc]
         if type(current) is float:
             rs.at[id, cc] = cv
         else:
             rs.at[id, cc] = current | cv
-        if is_trace_enabled: print cc, ' ', id, '->', rs.at[id, cc]
+        if is_trace_enabled: print cc, id, '->', rs.at[id, cc]
 
-    print 'descriptions :' + str(descrs.shape)
+    print 'descriptions :', descrs.shape
 
     for index, row in descrs.iterrows():
-        if index % 10000 == 0: print 'processed descr: ' + str(index)
+        if index % 10000 == 0: print 'processed descr:', index
         id = int(row['product_uid'])
         if id not in rs.index: continue
         is_trace_enabled = id in product_to_trace
 
-        if is_trace_enabled: print 'product_description ', id, '->', row['product_description']
+        if is_trace_enabled: print 'product_description', id, '->', row['product_description']
         rs.at[id, 'full_descr'] = value_transformer('full_descr', row['product_description'], skip_stop_words)
-        if is_trace_enabled: print 'full_descr ', id, '->', rs.at[id, 'full_descr']
+        if is_trace_enabled: print 'full_descr', id, '->', rs.at[id, 'full_descr']
 
-    print 'result:' + str(rs.shape)
+    print 'result:', rs.shape
     return rs
 
 
@@ -88,7 +89,7 @@ def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_word
     x = np.zeros((data.shape[0], len(p2a.columns) + 1), dtype=np.int)
     column_names = np.hstack((p2a.columns, 'product_title'))
     for index, row in data.iterrows():
-        if index % 10000 == 0: print 'processed data: ', index
+        if index % 10000 == 0: print 'processed data:', index
         pid = int(row['product_uid'])
         oid = int(row['id'])
         is_trace_enabled = (pid in product_to_trace) or (oid in id_to_trace)
@@ -123,12 +124,12 @@ def load_features(product_to_trace=None, id_to_trace=None, combine_sizes=True, s
     train_data = pd.read_csv('./dataset/train.csv')
     y_train = train_data['relevance']
     id_train = train_data['id']
-    print 'preparing training features: ', train_data.shape
+    print 'preparing training features:', train_data.shape
     X_train = internal_enrich_features(train_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
 
     test_data = pd.read_csv('./dataset/test.csv')
     id_test = test_data['id']
-    print 'preparing test features: ' + str(test_data.shape)
+    print 'preparing test features:', test_data.shape
     X_test = internal_enrich_features(test_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
 
     return X_train, y_train, X_test, id_train, id_test
