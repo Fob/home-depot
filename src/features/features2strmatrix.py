@@ -5,16 +5,17 @@ import nltk.corpus as corpus
 import numpy as np
 import pandas as pd
 from nltk import PorterStemmer
-from nltk.corpus import stopwords
 from pandas import DataFrame
 
-stop_words = set(stopwords.words('english')) | {'', '&', 'x', 'ft', 'lb', 'f'}
+from src.features.sets import boolean_columns
+from src.features.sets import stop_words
 
 
 def column_transformer(x, combine=True):
+    if x in boolean_columns: return 'combined_boolean'
     c = str(x).lower()
     if combine:
-        if re.search('(:?width|height|depth|length|size|thickness|capacity)', c) is not None:
+        if re.search('(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\))', c) is not None:
             return 'combined_size'
         if re.search('weight', c) is not None:
             return 'combined_weight'
@@ -24,12 +25,23 @@ def column_transformer(x, combine=True):
             return 'combined_material'
         if re.search('temperature', c) is not None:
             return 'combined_temperature'
+        if re.search('type', c) is not None:
+            return 'combined_type'
+        if re.search('(:?time|\(hours\))', c) is not None:
+            return 'combined_time'
+        if re.search('(:?number of|count)', c) is not None:
+            return 'combined_count'
     c = re.sub('bullet\d+', 'bullet', c)
     return c
 
 
 def value_transformer(c, v, skip_stop_words=True):
     v = str(v).lower()
+    if c in boolean_columns:
+        if v.startswith('y'):
+            v = str(c).lower()
+        else:
+            return set([])
     v = v.decode('utf-8', 'ignore')
     v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
     v = re.sub('(?<!\d)/(?!\d)', ' ', v)
@@ -91,7 +103,7 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
         is_trace_enabled = id in product_to_trace
 
         if is_trace_enabled: print row['name'], id, '->', row['value']
-        cv = value_transformer(cc, row['value'], skip_stop_words)
+        cv = value_transformer(row['name'], row['value'], skip_stop_words)
         current = rs.at[id, cc]
         if type(current) is float:
             rs.at[id, cc] = cv
@@ -165,10 +177,11 @@ def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_word
     return x
 
 
-def load_features(product_to_trace=None, id_to_trace=None, combine_sizes=True, skip_stop_words=True):
+def load_features(product_to_trace=None, id_to_trace=None, combine_sizes=True, skip_stop_words=True,
+                  p2a=None):
     if id_to_trace is None: id_to_trace = {}
     if product_to_trace is None: product_to_trace = {}
-    p2a = product2attrs(product_to_trace, combine_sizes, skip_stop_words)
+    if p2a is None: p2a = product2attrs(product_to_trace, combine_sizes, skip_stop_words)
     train_data = pd.read_csv('./dataset/train.csv')
     y_train = train_data['relevance']
     id_train = train_data['id']
