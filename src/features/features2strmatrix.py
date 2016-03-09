@@ -8,18 +8,28 @@ from nltk import PorterStemmer
 from pandas import DataFrame
 
 from src.features.sets import boolean_columns
+from src.features.sets import columns_for_weight
 from src.features.sets import stop_words
 
 
-def column_transformer(x, combine=True):
+def to_set(x):
+    if type(x) is float: return set([])
+    return x
+
+
+def column_transformer(x, combine=True, columns_to_merge=None):
     if x in boolean_columns: return 'combined_boolean'
     c = str(x).lower()
+    if columns_to_merge is not None:
+        if c in columns_to_merge: return 'bullet'
     if combine:
-        if re.search('(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\))', c) is not None:
+        if re.search(
+                '(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\)|\(mm\)|\(miles\))',
+                c) is not None:
             return 'combined_size'
-        if re.search('weight', c) is not None:
+        if re.search('(:?weight|\(lb\.\))', c) is not None:
             return 'combined_weight'
-        if re.search('color', c) is not None:
+        if re.search('(:?color|rgb value)', c) is not None:
             return 'combined_color'
         if re.search('material', c) is not None:
             return 'combined_material'
@@ -27,10 +37,23 @@ def column_transformer(x, combine=True):
             return 'combined_temperature'
         if re.search('type', c) is not None:
             return 'combined_type'
-        if re.search('(:?time|\(hours\))', c) is not None:
+        if re.search('(:?time|\(hours\)|\(min\.\))', c) is not None:
             return 'combined_time'
-        if re.search('(:?number of|count)', c) is not None:
+        if re.search('(:?number of|count|# of)', c) is not None:
             return 'combined_count'
+        if re.search('(?:degree|angle|\(deg\))', c) is not None:
+            return 'combined_angle'
+        if re.search('(:?\(sq\.? ft\.?\)|square foot|\(sq\. in\.\))', c) is not None:
+            return 'combined_area'
+        if re.search('(?:\(\w?hz\)|frequency|\(rpm\)|\(gpm\)|\(cfm\)|\(mph\)|speed|/hour|/min|per min)', c) is not None:
+            return 'combined_speed'
+        if re.search('(?:\(db\)|noise)', c) is not None:
+            return 'combined_noise'
+        if re.search('\([^\(\)]+\)$', c) is not None:
+            return 'combined_measurements'
+        if re.search('/', c) is not None:
+            return 'combined_type'
+
     c = re.sub('bullet\d+', 'bullet', c)
     return c
 
@@ -46,7 +69,7 @@ def value_transformer(c, v, skip_stop_words=True):
     v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
     v = re.sub('(?<!\d)/(?!\d)', ' ', v)
     v = re.sub('&\w+;', ' ', v)
-    av = set(re.split('[\s,\)\(\xb0]', v))
+    av = set(re.split('[\s,\)\(\xb0\?]', v))
     if skip_stop_words:
         av = av - stop_words
     stemmer = PorterStemmer()
@@ -79,15 +102,16 @@ def search_transformer(v, skip_stop_words=True):
     return av, avs
 
 
-def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
+def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, merge_factor=10):
     if product_to_trace is None: product_to_trace = {}
+    columns_to_merge = set(columns_for_weight(merge_factor))
     attrs = pd.read_csv('./dataset/attributes.csv')
     attrs = attrs[attrs['product_uid'] == attrs['product_uid']]
     descrs = pd.read_csv('./dataset/product_descriptions.csv')
     descrs = descrs[descrs['product_uid'] == descrs['product_uid']]
 
     print 'attributes:', attrs.shape
-    colls = attrs['name'].apply(lambda c: column_transformer(c, combine)).unique()
+    colls = attrs['name'].apply(lambda c: column_transformer(c, combine, columns_to_merge)).unique()
     print 'attributes columns:', len(colls)
 
     # noinspection PyUnresolvedReferences
@@ -99,16 +123,13 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
     for index, row in attrs.iterrows():
         if index % 100000 == 0: print 'processed:', index
         id = int(row['product_uid'])
-        cc = column_transformer(row['name'], combine)
+        cc = column_transformer(row['name'], combine, columns_to_merge)
         is_trace_enabled = id in product_to_trace
 
         if is_trace_enabled: print row['name'], id, '->', row['value']
         cv = value_transformer(row['name'], row['value'], skip_stop_words)
         current = rs.at[id, cc]
-        if type(current) is float:
-            rs.at[id, cc] = cv
-        else:
-            rs.at[id, cc] = current | cv
+        rs.at[id, cc] = to_set(current) | cv
         if is_trace_enabled: print cc, id, '->', rs.at[id, cc]
 
     print 'descriptions :', descrs.shape
@@ -121,10 +142,8 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
 
         if is_trace_enabled: print 'product_description', id, '->', row['product_description']
         current = rs.at[id, 'bullet']
-        if type(current) is float:
-            rs.at[id, 'bullet'] = value_transformer('bullet', row['product_description'], skip_stop_words)
-        else:
-            rs.at[id, 'bullet'] = current | value_transformer('bullet', row['product_description'], skip_stop_words)
+        rs.at[id, 'bullet'] = to_set(current) | value_transformer('bullet',
+                                                                  row['product_description'], skip_stop_words)
         if is_trace_enabled: print 'bullet', id, '->', rs.at[id, 'bullet']
 
     print 'result:', rs.shape
