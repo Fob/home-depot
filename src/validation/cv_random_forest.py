@@ -1,7 +1,6 @@
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 import src.features.extract_features as ext_ft
-from src.validation.cv import run_cv
 
 test_data = pd.read_csv('./dataset/test.csv')
 
@@ -10,37 +9,49 @@ for vect in ['cnt', 'tfidf']:
 
     print 'X_train.shape = %s; y_train.shape = %s; X_test.shape = %s' % (X_train.shape, y_train.shape, X_test.shape)
 
-    #X_train_red = X_train.tocsc()[0:5000,:]
-    #y_train_red = y_train[0:5000]
-    #X_test_red = X_test.tocsc()[0:1000,:]
-
     clf = RandomForestRegressor(n_estimators=100, n_jobs=-1, random_state=257)
     clf.fit(X_train, y_train)
-    #clf.fit(X_train_red, y_train_red)
 
     pred = clf.predict(X_test)
-    #pred = clf.predict(X_test_red)
 
     print 'prediction done for %s' % vect
-
-    #test_data = test_data[0:1000]
 
     out = pd.DataFrame({'id': test_data['id'], 'relevance': pred})
     out.to_csv('./result/rf1_%s.csv' % vect, index=None)
 
-
-'''
-print '1'
-clf = RandomForestRegressor()
-clf.fit(X.tocsc()[1:5000,:], y[1:5000])
-print '2'
-pred = clf.predict(X.tocsc()[1:5000,:])
-print 'RMSE=%f' % rmse(y[1:5000], pred)
-
-clf = RandomForestRegressor()
-score = run_cv(clf, X.tocsc()[0:5000,:], y[0:5000])
-score = run_cv(clf, X, y)
 '''
 
 
-X_train, y_train, X_test = ext_ft.get_all_in_one_feature_matrix(vect='tfidf')
+
+
+'''
+
+import src.features.extract_count_features as ext_c_ft
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.cross_validation import KFold
+from sklearn.cross_validation import cross_val_score
+from src.algos.utils import RMSE
+
+#ext_c_ft.extract_process_and_save_features1()
+
+train_df, test_df = ext_c_ft.load_features1()
+
+X_train = train_df.ix[:, :'ratio_material'].values
+y_train = train_df['relevance'].values
+X_test = test_df.ix[:, :'ratio_material'].values
+
+
+cv = KFold(len(y_train), n_folds=5, shuffle=True, random_state=23)
+for n_tree in [100, 200, 300, 400, 500]:
+    clf = RandomForestRegressor(n_estimators=n_tree, n_jobs=-1, random_state=42)
+    score = cross_val_score(clf, X_train, y_train, scoring=RMSE, cv=cv)
+    print 'CV score = %f for %d trees' % (score.mean(), n_tree)
+
+
+clf = RandomForestRegressor(n_estimators=500, n_jobs=-1, random_state=42)
+clf.fit(X_train, y_train)
+y_test = clf.predict(X_test)
+
+out = pd.DataFrame({'id': test_df.index, 'relevance': y_test})
+out.to_csv('./result/rf_counts_001.csv', index=None)
+
