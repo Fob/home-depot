@@ -4,11 +4,12 @@ import re
 import nltk.corpus as corpus
 import numpy as np
 import pandas as pd
+import scipy.sparse as sci
 from nltk import PorterStemmer
 from pandas import DataFrame
+from sklearn.feature_extraction.text import CountVectorizer
 
 from src.features.sets import boolean_columns
-from src.features.sets import columns_for_weight
 from src.features.sets import stop_words
 
 
@@ -17,11 +18,9 @@ def to_set(x):
     return x
 
 
-def column_transformer(x, combine=True, columns_to_merge=None):
+def column_transformer(x, combine=True):
     if x in boolean_columns: return 'combined_boolean'
     c = str(x).lower()
-    if columns_to_merge is not None:
-        if c in columns_to_merge: return 'bullet'
     if combine:
         if re.search(
                 '(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\)|\(mm\)|\(miles\))',
@@ -102,16 +101,15 @@ def search_transformer(v, skip_stop_words=True):
     return av, avs
 
 
-def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, merge_factor=10):
+def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
     if product_to_trace is None: product_to_trace = {}
-    columns_to_merge = set(columns_for_weight(merge_factor))
     attrs = pd.read_csv('./dataset/attributes.csv')
     attrs = attrs[attrs['product_uid'] == attrs['product_uid']]
     descrs = pd.read_csv('./dataset/product_descriptions.csv')
     descrs = descrs[descrs['product_uid'] == descrs['product_uid']]
 
     print 'attributes:', attrs.shape
-    colls = attrs['name'].apply(lambda c: column_transformer(c, combine, columns_to_merge)).unique()
+    colls = attrs['name'].apply(lambda c: column_transformer(c, combine)).unique()
     print 'attributes columns:', len(colls)
 
     # noinspection PyUnresolvedReferences
@@ -123,7 +121,7 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, mer
     for index, row in attrs.iterrows():
         if index % 100000 == 0: print 'processed:', index
         id = int(row['product_uid'])
-        cc = column_transformer(row['name'], combine, columns_to_merge)
+        cc = column_transformer(row['name'], combine)
         is_trace_enabled = id in product_to_trace
 
         if is_trace_enabled: print row['name'], id, '->', row['value']
@@ -158,8 +156,9 @@ def count_words(data, search):
 
 def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_words, p2a):
     attrs_len = len(p2a.columns)
-    x = np.zeros((data.shape[0], attrs_len + 1), dtype=np.int)
-    column_names = np.hstack((p2a.columns, 'syn_combo'))
+    x = np.zeros((data.shape[0], attrs_len), dtype=np.float)
+    x_derivatives = np.zeros((data.shape[0], 3), dtype=np.float)
+    column_names = p2a.columns
     for index, row in data.iterrows():
         if index % 10000 == 0: print 'processed data:', index
         pid = int(row['product_uid'])
@@ -180,24 +179,42 @@ def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_word
             vals = attrs.apply(lambda d: count_words(d, search_set))
             x[index, :attrs_len] = vals.values
             # synonyms combo
-            x[index, -1] += np.sum(attrs.apply(lambda d: count_words(d, syn_set)))
+            x_derivatives[index, 0] += np.sum(attrs.apply(lambda d: count_words(d, syn_set)))
 
         # title to bullet
         x[index, 0] += count_words(product_title, search_set)
         # title to synonyms combo
-        x[index, -1] += count_words(product_title, syn_set)
+        x_derivatives[index, 0] += count_words(product_title, syn_set)
+        x_derivatives[index, 1] = len(search_set)
+        if x_derivatives[index, 1] != 0:
+            x_derivatives[index, 2] = float(np.sum(x[index, :])) / float(len(search_set))
 
         if is_trace_enabled:
             print 'result', pid, '(', oid, ')'
             print list(column_names[x[index, :] > 0])
             print list(x[index, x[index, :] > 0])
+            print list(x_derivatives[index, :])
 
-    print 'feature prepared ', x.shape
-    return x
+    print 'feature prepared', x.shape, x_derivatives.shape
+    return x, x_derivatives
 
 
-def load_features(product_to_trace=None, id_to_trace=None, combine_sizes=True, skip_stop_words=True,
-                  p2a=None):
+def merge_word_match(x_train, x_test, merge_factor):
+    x_train_merged = np.array(x_train)
+    x_test_merged = np.array(x_test)
+
+    indx = np.sum(x_train_merged, axis=0) < merge_factor
+    print 'merge columns', x_train_merged[:, indx].shape
+    x_train_merged[:, 0] = x_train_merged[:, 0] + np.sum(x_train_merged[:, indx], axis=1)
+    x_train_merged = x_train_merged[:, indx == False]
+
+    x_test_merged[:, 0] = x_test_merged[:, 0] + np.sum(x_test_merged[:, indx], axis=1)
+    x_test_merged = x_test_merged[:, indx == False]
+    return x_train_merged, x_test_merged
+
+
+def load_raw_features(product_to_trace=None, id_to_trace=None, combine_sizes=True, skip_stop_words=True,
+                      p2a=None):
     if id_to_trace is None: id_to_trace = {}
     if product_to_trace is None: product_to_trace = {}
     if p2a is None: p2a = product2attrs(product_to_trace, combine_sizes, skip_stop_words)
@@ -205,13 +222,59 @@ def load_features(product_to_trace=None, id_to_trace=None, combine_sizes=True, s
     y_train = train_data['relevance']
     id_train = train_data['id']
     print 'preparing training features:', train_data.shape
-    X_train = internal_enrich_features(train_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
+    x_train, x_tr_der = internal_enrich_features(train_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
 
     test_data = pd.read_csv('./dataset/test.csv')
     id_test = test_data['id']
     print 'preparing test features:', test_data.shape
-    X_test = internal_enrich_features(test_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
+    x_test, x_ts_der = internal_enrich_features(test_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
 
-    return X_train, y_train, X_test, id_train, id_test
+    return x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test
 
-# X_train, y_train, X_test, id_train, id_test = load_features(product_to_trace={100001})
+
+def load_features(merge_factor=20, product_to_trace=None, id_to_trace=None, combine_sizes=True, skip_stop_words=True,
+                  p2a=None):
+    x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_raw_features(product_to_trace,
+                                                                                        id_to_trace,
+                                                                                        combine_sizes,
+                                                                                        skip_stop_words,
+                                                                                        p2a)
+
+    x_train, x_test = merge_word_match(x_train, x_test, merge_factor)
+    print 'after merge', x_train.shape, x_test.shape
+    x_train = np.hstack((x_train, x_tr_der))
+    x_test = np.hstack((x_test, x_ts_der))
+    return x_train, y_train, x_test, id_train, id_test
+
+
+def product_search_vectorize(product_vectorizer, search_term_vectorizer, data):
+    x_product = product_vectorizer.transform([str(p) for p in data['product_uid']])
+    x_search = search_term_vectorizer.transform(data['search_term'])
+    x = sci.hstack((x_product, x_search))
+    print 'features prepared', x.shape
+    return x
+
+
+def product_to_search_features(product_to_trace=None, combine_sizes=True, skip_stop_words=True,
+                               p2a=None):
+    if product_to_trace is None: product_to_trace = {}
+    if p2a is None: p2a = product2attrs(product_to_trace, combine_sizes, skip_stop_words)
+
+    train_data = pd.read_csv('./dataset/train.csv')
+    test_data = pd.read_csv('./dataset/test.csv')
+
+    products = [str(p) for p in p2a.index]
+    product_vectorizer = CountVectorizer()
+    product_vectorizer.fit(products)
+    search_term_vectorizer = CountVectorizer()
+    search_term_vectorizer.fit(test_data['search_term'])
+
+    y_train = train_data['relevance']
+    id_train = train_data['id']
+    x_train = product_search_vectorize(product_vectorizer, search_term_vectorizer, train_data)
+
+    id_test = test_data['id']
+    x_test = product_search_vectorize(product_vectorizer, search_term_vectorizer, test_data)
+    return x_train, y_train, x_test, id_train, id_test
+
+# x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_features(product_to_trace={100001})
