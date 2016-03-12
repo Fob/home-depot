@@ -1,15 +1,18 @@
-import numpy as np
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import RidgeCV
 
 from src.algos.utils import rmse
-from src.features.features2strmatrix import load_features
+# from src.features.features2strmatrix import load_features
 from src.features.features2strmatrix import product2attrs
+from src.features.features2strmatrix import product_to_search_features
 
 p_to_a = product2attrs()
-X_train, y_train, X_test, id_train, id_test = load_features(p2a=p_to_a)
+# X_train, y_train, X_test, id_train, id_test = load_features(p2a=p_to_a)
+X_train, y_train, X_test, id_train, id_test = product_to_search_features(p2a=p_to_a)
 
-clf = LinearRegression()
+a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+clf = RidgeCV(alphas=[0.1 * x for x in a], normalize=True)
 clf.fit(X_train, y_train)
+print clf.alpha_
 
 y_predicted = clf.predict(X_train)
 y_predicted[y_predicted < 1] = 1
@@ -21,10 +24,6 @@ print 'full train error', rmse(y_train, y_predicted)
 # 0.512698447827
 
 
-cc = np.hstack((p_to_a.columns, 'syn_combo'))
-print len(cc[np.sum(X_train, axis=0) == 0])
 
-vv = np.sum(X_train, axis=0)
-column_weight = np.vstack((cc, vv))
-
-print list(column_weight)
+# cc = np.hstack((p_to_a.columns, 'syn_combo'))
+# print len(cc[np.sum(X_train, axis=0) == 0])

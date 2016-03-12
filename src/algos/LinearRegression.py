@@ -6,7 +6,8 @@ from src.features.features2strmatrix import load_features
 
 X_train, y_train, X_test, id_train, id_test = load_features()
 
-clf = linear_model.Ridge(alpha=0.02484, normalize=True)
+clf = linear_model.Ridge(alpha=0.009, normalize=True)
+# 0.02484
 clf.fit(X_train, y_train)
 
 y_predicted = clf.predict(X_train)
@@ -23,3 +24,4 @@ out.to_csv('./result/linear_regression_regularized.csv', index=None)
 # 0.52233
 # 0.51889
 # 0.51883
+# 0.50061
