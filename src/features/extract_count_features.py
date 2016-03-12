@@ -33,6 +33,7 @@ def process_str(s):
         s = s.replace(")", " ")
         s = s.replace("$"," ")
         s = s.replace("?"," ")
+        s = s.replace("!"," ")
         s = s.replace(":"," ")
         s = s.replace("..",".")
         s = s.replace(" \\ "," ")
@@ -177,6 +178,8 @@ def load_features1():
         new_df.at[index, 'words_in_brand'] = count_common_words(row['brand'], row['search_term'])
         new_df.at[index, 'words_in_color'] = count_common_words(row['color'], row['search_term'])
         new_df.at[index, 'words_in_material'] = count_common_words(row['material'], row['search_term'])
+        new_df.at[index, 'whole_query_in_title'] = 1 if row['search_term'] in row['product_title'] else 0
+        new_df.at[index, 'whole_query_in_descr'] = 1 if row['search_term'] in row['descr'] else 0
 
     new_df['query_len'] = data['search_term'].map(lambda x: len(x.split(" ")))
     new_df['ratio_title'] = new_df['words_in_title']/new_df['query_len']
