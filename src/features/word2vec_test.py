@@ -1,12 +1,14 @@
 import gensim
+import numpy as np
 from gensim.models.doc2vec import TaggedLineDocument, LabeledSentence
 from collections import namedtuple
-import multiprocessing
+import multiprocessing as mlt
 from gensim.models import Doc2Vec, Word2Vec
 import gensim.models.doc2vec
 from collections import OrderedDict
 import pandas as pd
 import re
+from scipy.sparse import hstack, vstack
 
 #--------------------------
 #LOGGING
@@ -22,46 +24,171 @@ logging.root.setLevel(level=logging.INFO)
 
 #text filtration
 data = pd.DataFrame(pd.read_csv('./dataset/train.csv'))
-test = data['product_title'][:10]
-test = [re.sub("[^A-Za-z-\s\d/,\.]", "", row_string.lower()) for row_string in test]
-test = [re.sub("\s(ft|in|cu|lb)\.", " \\1", row_string) for row_string in test]
-[re.sub("\s([A-Za-z]+)(\.|,)", " \\1", row_string) for row_string in test]
+all_prod_title = data['product_title'][:10000]
+all_prod_title = [re.sub("[^A-Za-z-\s\d/,\.]", "", row_string.lower()) for row_string in all_prod_title]
+all_prod_title = [re.sub("\s(ft|in|cu|lb)\.", " \\1", row_string) for row_string in all_prod_title]
+all_prod_title = [re.sub("\s([A-Za-z]+)(\.|,)", " \\1", row_string) for row_string in all_prod_title]
+print "filtered"
+
+#get filtered data
+train_data = pd.DataFrame(pd.read_csv('./dataset/train_test_new/train_new1.csv'))
+test_data = pd.DataFrame(pd.read_csv('./dataset/train_test_new/test_new1.csv'))
+cores = mlt.cpu_count()
 
 
-product_data = pd.DataFrame(pd.read_csv('./dataset/product_descriptions.csv'))
-all_text_data = product_data['product_description'].iloc[:1000]
-sentences = [row.lower().split() for row in all_text_data]
-cores = multiprocessing.cpu_count()
-model = Word2Vec(sentences, min_count=1, workers=cores, alpha=0.025, min_alpha=0.025)
-model.most_similar('angle')
 
-for n in range(10):
+
+
+
+#PRODUCT TITLE
+#----------------------------------------------------------------------------------
+train_prod_title = train_data['product_title']
+train_prod_title_sentences = [row.split() for row in train_prod_title]
+test_prod_title = test_data['product_title']
+test_prod_title_sentences = [row.split() for row in test_prod_title]
+prod_title_sentences = train_prod_title_sentences + test_prod_title_sentences
+model = Word2Vec(prod_title_sentences, min_count=1, workers=cores, alpha=0.025, min_alpha=0.025)
+for n in range(20):
     print n
-    model.train(sentences=sentences)
+    model.train(sentences=prod_title_sentences)
 
-model.most_similar('hammer')
+model.most_similar('bosch')
+model.most_similar('makita')
+model.most_similar('drill')
+
+prod_title_model_filename = "./src/features/prod_title_word2vec_model.model"
+model.save(prod_title_model_filename)
 
 
-train_data = pd.DataFrame(pd.read_csv('./dataset/train.csv')[0:5])
-
-
+# generate features
+title_loaded_model = Word2Vec.load(prod_title_model_filename)
+sim_value_prod_title = []
 for n in range(len(train_data)):
     row_n = train_data.iloc[n]
-    prod_title = row_n['product_title'].lower().split()
-    prod_uid = row_n['product_uid']
-    search_term = row_n['search_term'].lower().split()
-    product_desc = product_data[product_data['product_uid'] == prod_uid]['product_description'].iloc[0].lower().split()
+    prod_title = row_n['product_title'].split()
+    search_term = row_n['search_term'].split()
+    if all(term in title_loaded_model.vocab for term in search_term):
+        sim_value_prod_title = np.append(sim_value_prod_title, title_loaded_model.n_similarity(search_term, prod_title))
+    else:
+        sim_value_prod_title = np.append(sim_value_prod_title, 0)
 
-    #value_prod_title = model.n_similarity(search_term, prod_title)
-    value_prod_desc = model.n_similarity(search_term, product_desc)
+    if n%10000 == 0:
+        print len(train_data) - n
+#    print n
+#    print search_term
+#    print prod_title
+#    print value_prod_desc
+#    print '---------------'
 
+print sim_value_prod_title.shape
+
+#----------------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+#DESCRIPTION
+#----------------------------------------------------------------------------------
+train_descr = train_data['descr']
+train_descr_sentences = [row.split() for row in train_descr]
+test_descr = test_data['descr']
+test_descr_sentences = [row.split() for row in test_descr]
+descr_sentences = train_descr_sentences + test_descr_sentences
+descr_model = Word2Vec(descr_sentences, min_count=1, workers=cores, alpha=0.025, min_alpha=0.025)
+for n in range(10):
     print n
-    #print value_prod_title
-    print search_term
-    print prod_title
-    print value_prod_desc
-    print '---------------'
+    descr_model.train(sentences=descr_sentences)
 
-#train_data = pd.DataFrame(pd.read_csv('./dataset/train.csv'))
-#train_data['relevance'].unique()
+descr_model.most_similar('bosch')
+descr_model.most_similar('makita')
+descr_model.most_similar('drill')
 
+descr_model_filename = "./src/features/descr_word2vec_model.model"
+descr_model.save(descr_model_filename)
+descr_loaded_model = Word2Vec.load(descr_model_filename)
+
+# generate features
+descr_loaded_model = Word2Vec.load(descr_model_filename)
+sim_value_prod_descr = []
+for n in range(len(train_data)):
+    row_n = train_data.iloc[n]
+    descr = row_n['descr'].split()
+    search_term = row_n['search_term'].split()
+    if all(term in descr_loaded_model.vocab for term in search_term):
+        sim_value_prod_descr = np.append(sim_value_prod_descr, descr_loaded_model.n_similarity(search_term, descr))
+    else:
+        sim_value_prod_descr = np.append(sim_value_prod_descr, 0)
+
+    if n%10000 == 0:
+        print len(train_data) - n
+#    print n
+#    print search_term
+#    print prod_title
+#    print value_prod_desc
+#    print '---------------'
+
+print sim_value_prod_descr.shape
+
+
+
+
+
+#----------------------------------------------------------------------------------
+# TRAIN
+# SAVE NEW FEATURES FOR TRAIN TO FILE
+
+new_features_train = pd.DataFrame({'similarity_search_title': sim_value_prod_title, 'similarity_search_prod_descr': sim_value_prod_descr})
+new_features_train.to_csv('./src/features/train_word2vec_features_title_descr.csv', index=None)
+
+
+
+
+
+
+
+
+#----------------------------------------------------------------------------------
+# TEST
+# SAVE NEW FEATURES FOR TEST TO FILE
+
+prod_title_model_filename = "./src/features/prod_title_word2vec_model.model"
+title_loaded_model = Word2Vec.load(prod_title_model_filename)
+descr_model_filename = "./src/features/descr_word2vec_model.model"
+descr_loaded_model = Word2Vec.load(descr_model_filename)
+
+
+sim_value_prod_descr = []
+sim_value_prod_title = []
+for n in range(len(test_data)):
+    row_n = test_data.iloc[n]
+    descr = row_n['descr'].split()
+    prod_title = row_n['product_title'].split()
+    search_term = row_n['search_term'].split()
+    #title
+    if all(term in title_loaded_model.vocab for term in search_term):
+        sim_value_prod_title = np.append(sim_value_prod_title, title_loaded_model.n_similarity(search_term, prod_title))
+    else:
+        sim_value_prod_title = np.append(sim_value_prod_title, 0)
+
+    #descr
+    if all(term in descr_loaded_model.vocab for term in search_term):
+        sim_value_prod_descr = np.append(sim_value_prod_descr, descr_loaded_model.n_similarity(search_term, descr))
+    else:
+        sim_value_prod_descr = np.append(sim_value_prod_descr, 0)
+
+    if n%10000 == 0:
+        print len(test_data) - n
+#    print n
+#    print search_term
+#    print prod_title
+#    print value_prod_desc
+#    print '---------------'
+
+new_features_test = pd.DataFrame({'similarity_search_title': sim_value_prod_title, 'similarity_search_prod_descr': sim_value_prod_descr})
+new_features_test.to_csv('./src/features/test_word2vec_features_title_descr.csv', index=None)
+
+#----------------------------------------------------------------------------------
