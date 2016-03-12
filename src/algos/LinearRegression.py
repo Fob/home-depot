@@ -4,9 +4,10 @@ from sklearn import linear_model
 from src.algos.utils import rmse
 from src.features.features2strmatrix import load_features
 
-X_train, y_train, X_test, id_train, id_test = load_features()
+X_train, y_train, X_test, id_train, id_test = load_features(merge_factor=150)
+# X_train, y_train, X_test, id_train, id_test = product_to_search_features()
 
-clf = linear_model.Ridge(alpha=0.009, normalize=True)
+clf = linear_model.Ridge(alpha=0.0007, normalize=True)
 # 0.02484
 clf.fit(X_train, y_train)
 

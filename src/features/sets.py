@@ -2,6 +2,8 @@ from nltk.corpus import stopwords
 
 stop_words = set(stopwords.words('english')) | {'', '&', 'x', 'ft', 'lb', 'f'}
 
+additional_syn = {'or': {'oil-rubbed', 'oil', 'rubbed'}}
+
 boolean_columns = {'Hooded', 'Handshower included', 'Hooks Included', 'Humidity Gauge', 'Elastic hem',
                    'Extra bulbs/fuses included', 'Cover Plate Included', 'Non marring', 'Nonconductive', 'Wood Veneer',
                    'Translucent fuel tank', 'Removes pollen', 'Tow hitch included', 'Dispenses Soap', 'Detects metal',
@@ -325,5 +327,5 @@ boolean_columns = {'Hooded', 'Handshower included', 'Hooks Included', 'Humidity 
                    'Catch pan included'}
 
 
-def columns_for_weight(w):
-    return columns_weights[0, columns_weights[1, :] < w]
+def get_syn(w):
+    return additional_syn.get(w, set([]))

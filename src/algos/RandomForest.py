@@ -4,7 +4,7 @@ from sklearn.ensemble import RandomForestRegressor
 from src.algos.utils import rmse
 from src.features.features2strmatrix import load_features
 
-X_train, y_train, X_test, id_train, id_test = load_features(merge_factor=100)
+X_train, y_train, X_test, id_train, id_test = load_features(merge_factor=150)
 
 clf = RandomForestRegressor(n_estimators=500, n_jobs=-1, random_state=257)
 clf.fit(X_train, y_train)
