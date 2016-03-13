@@ -25,6 +25,7 @@ def to_set(x):
 def column_transformer(x, combine=True):
     if x in boolean_columns: return 'combined_boolean'
     c = str(x).lower()
+    c = c.decode('utf-8', 'ignore')
     if combine:
         if re.search(
                 '(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\)|\(mm\)|\(miles\))',
@@ -107,6 +108,20 @@ def search_transformer(v, skip_stop_words=True):
     return av, avs
 
 
+def serialize_attr(x):
+    if type(x) is float: return None
+    str_val = ''
+    for y in x:
+        str_val += y + ' '
+    return str_val.strip(' ')
+
+
+def deserialize_attr(x):
+    if type(x) is unicode:
+        return set(x.split(' '))
+    return x
+
+
 def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, enable_stemming=True):
     if product_to_trace is None: product_to_trace = {}
     file_name = './dataset/product_to_attributes.'
@@ -116,8 +131,11 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
     file_name += 'csv'
 
     if os.path.isfile(file_name):
-        rs = pd.read_csv(file_name)
-        print 'load', file_name, rs.shape
+        print 'load data from file'
+        rs = pd.read_csv(file_name, encoding='utf-8', index_col=0)
+        rs = rs.applymap(deserialize_attr)
+        print 'loaded', file_name, '->', rs.shape
+        return rs
 
     attrs = pd.read_csv('./dataset/attributes.csv')
     attrs = attrs[attrs['product_uid'] == attrs['product_uid']]
@@ -133,6 +151,7 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
     print 'unique ids:', len(product_ids)
 
     rs = DataFrame(index=product_ids, columns=np.hstack(colls))
+    rs.index.names = ['product_uid']
 
     print 'process attrs'
     for index, row in attrs.iterrows():
@@ -167,18 +186,20 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
         if is_trace_enabled: print 'bullet', id, '->', rs.at[id, 'bullet']
 
     print
-    print 'result:', rs.shape
-    rs.to_csv(file_name)
+    print 'store data into file'
+    serialized_data = rs.applymap(serialize_attr)
+    serialized_data.to_csv(file_name, encoding='utf-8')
+    print 'result:', rs.shape, '->', file_name
     return rs
 
 
 def count_words(data, search):
-    if type(data) is float:
-        return 0
-    return len(data & search)
+    if type(data) is set:
+        return len(data & search)
+    return 0
 
 
-def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_words, p2a):
+def internal_enrich_features(data, product_to_trace, skip_stop_words, p2a):
     attrs_len = len(p2a.columns)
     x = np.zeros((data.shape[0], attrs_len), dtype=np.float)
     x_derivatives = np.zeros((data.shape[0], 4), dtype=np.float)
@@ -187,7 +208,7 @@ def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_word
         if index % 10000 == 0: print index,
         pid = int(row['product_uid'])
         oid = int(row['id'])
-        is_trace_enabled = (pid in product_to_trace) or (oid in id_to_trace)
+        is_trace_enabled = pid in product_to_trace
 
         if is_trace_enabled:
             print
@@ -240,29 +261,26 @@ def merge_word_match(x_train, x_test, merge_factor):
     return x_train_merged, x_test_merged
 
 
-def load_raw_features(product_to_trace, id_to_trace, skip_stop_words, p2a):
+def load_raw_features(product_to_trace, skip_stop_words, p2a):
     train_data = pd.read_csv('./dataset/train.csv')
     y_train = train_data['relevance']
     id_train = train_data['id']
     print 'preparing training features:', train_data.shape
-    x_train, x_tr_der = internal_enrich_features(train_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
+    x_train, x_tr_der = internal_enrich_features(train_data, product_to_trace, skip_stop_words, p2a)
 
     test_data = pd.read_csv('./dataset/test.csv')
     id_test = test_data['id']
     print 'preparing test features:', test_data.shape
-    x_test, x_ts_der = internal_enrich_features(test_data, product_to_trace, id_to_trace, skip_stop_words, p2a)
+    x_test, x_ts_der = internal_enrich_features(test_data, product_to_trace, skip_stop_words, p2a)
 
     return x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test
 
 
-def load_features(merge_factor=20, product_to_trace=None, id_to_trace=None, combine_sizes=True, skip_stop_words=True,
-                  p2a=None, product_to_search_reg=False):
-    if id_to_trace is None: id_to_trace = {}
+def load_features(merge_factor=20, product_to_trace=None, skip_stop_words=True, p2a=None):
     if product_to_trace is None: product_to_trace = {}
-    if p2a is None: p2a = product2attrs(product_to_trace, combine_sizes, skip_stop_words)
+    if p2a is None: p2a = product2attrs()
 
     x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_raw_features(product_to_trace,
-                                                                                        id_to_trace,
                                                                                         skip_stop_words,
                                                                                         p2a)
 
@@ -270,13 +288,6 @@ def load_features(merge_factor=20, product_to_trace=None, id_to_trace=None, comb
     print 'after merge', x_train.shape, x_test.shape
     x_train = np.hstack((x_train, x_tr_der))
     x_test = np.hstack((x_test, x_ts_der))
-
-    if product_to_search_reg:
-        x_reg_tr, x_reg_ts = product_search_regression(a=1, p2a=p2a)
-        print 'merge [', x_train.shape, x_reg_tr.shape, '] [', x_test.shape, x_reg_ts.shape, ']'
-        x_train = np.c_[x_train, x_reg_tr]
-        x_test = np.c_[x_test, x_reg_ts]
-        print 'features result', x_train.shape, x_test.shape
 
     return x_train, y_train, x_test, id_train, id_test
 

@@ -1,3 +1,7 @@
+import logging
+import os.path
+import sys
+
 import sklearn.linear_model as ln
 from sklearn import cross_validation
 from sklearn.cross_validation import KFold
@@ -7,7 +11,15 @@ from src.algos.utils import rmse
 from src.features.features2strmatrix import load_features
 from src.features.features2strmatrix import product2attrs
 
+# Logging
+program = os.path.basename(sys.argv[0])
+logger = logging.getLogger(program)
+logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s')
+logging.root.setLevel(level=logging.INFO)
+# Main
+
 p_to_a = product2attrs()
+
 X_train, y_train, X_test, id_train, id_test = load_features(p2a=p_to_a, merge_factor=0)
 
 a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
