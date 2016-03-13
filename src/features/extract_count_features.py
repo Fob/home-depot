@@ -12,7 +12,7 @@ strNum = {'zero':0,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7
 stop = stopwords.words('english')
 
 
-def process_str(s):
+def process_str(s, stemming=True, skip_stop_words=True):
     if isinstance(s, numbers.Number):
         return str(s)
     elif isinstance(s, str):
@@ -82,7 +82,12 @@ def process_str(s):
 
         s = " ".join([str(strNum[z]) if z in strNum else z for z in s.split(" ")])
         s = s.decode('utf-8', 'ignore') #todo
-        s = " ".join([stemmer.stem(w) for w in s.split(" ")])
+
+        if skip_stop_words:
+            s = " ".join([w for w in s.split(" ") if w not in stop])
+
+        if stemming:
+            s = " ".join([stemmer.stem(w) for w in s.split(" ")])
 
         return s
     else:
@@ -101,7 +106,8 @@ def descr_by_product():
 
 
 def extract_attribute_map(source_df, attr_name):
-    is_attr = np.array([1 if attr_name in str(x).lower() else 0 for x in source_df['name']])
+    #is_attr = np.array([1 if attr_name in str(x).lower() else 0 for x in source_df['name']])
+    is_attr = np.array([1 if re.search(attr_name, str(x).lower()) is not None else 0 for x in source_df['name']])
     attrs_df = source_df[is_attr > 0].copy()
     attrs_df['value'] = attrs_df['value'].str.lower()
     attrs_df['value'] = attrs_df['value'].str.replace(r"\W", " ")
@@ -125,22 +131,34 @@ def extract_process_and_save_features1():
     brand_by_prod = extract_attribute_map(attrs, 'brand')
     color_by_prod = extract_attribute_map(attrs, 'color')
     material_by_prod = extract_attribute_map(attrs, 'material')
+    size_by_prod = extract_attribute_map(attrs, '(width|height|depth|length|size|thickness|capacity|diameter)')
+    weight_by_prod = extract_attribute_map(attrs, 'weight')
+    volt_by_prod = extract_attribute_map(attrs, 'volt')
+    watt_by_prod = extract_attribute_map(attrs, 'watt')
+
+    print 'Maps collected..'
 
     data['descr'] = data.apply(lambda row: descr_by_prod[row['product_uid']], axis=1)
     data['brand'] = data.apply(lambda row: brand_by_prod[row['product_uid']] if row['product_uid'] in brand_by_prod else '', axis=1)
     data['color'] = data.apply(lambda row: color_by_prod[row['product_uid']] if row['product_uid'] in color_by_prod else '', axis=1)
     data['material'] = data.apply(lambda row: material_by_prod[row['product_uid']] if row['product_uid'] in material_by_prod else '', axis=1)
+    data['size'] = data.apply(lambda row: size_by_prod[row['product_uid']] if row['product_uid'] in size_by_prod else '', axis=1)
+    data['weight'] = data.apply(lambda row: weight_by_prod[row['product_uid']] if row['product_uid'] in weight_by_prod else '', axis=1)
+    data['volt'] = data.apply(lambda row: volt_by_prod[row['product_uid']] if row['product_uid'] in volt_by_prod else '', axis=1)
+    data['watt'] = data.apply(lambda row: watt_by_prod[row['product_uid']] if row['product_uid'] in watt_by_prod else '', axis=1)
 
-    data['product_title'] = data['product_title'].map(lambda x:process_str(x))
-    data['descr'] = data['descr'].map(lambda x:process_str(x))
-    data['search_term'] = data['search_term'].map(lambda x:process_str(x))
+    print 'Columns collected..'
+
+    data['product_title'] = data['product_title'].map(lambda x:process_str(x, skip_stop_words=False))
+    data['descr'] = data['descr'].map(lambda x:process_str(x, skip_stop_words=False))
+    data['search_term'] = data['search_term'].map(lambda x:process_str(x, skip_stop_words=False))
 
     new_train = data[:numtrain]
     new_test = data[numtrain:]
     new_test = new_test.drop('relevance', axis=1)
 
-    new_train.to_csv('./dataset/train_new1.csv', index=None, encoding='utf-8')
-    new_test.to_csv('./dataset/test_new1.csv', index=None, encoding='utf-8')
+    new_train.to_csv('./dataset/train_features_size.csv', index=None, encoding='utf-8')
+    new_test.to_csv('./dataset/test_features_size.csv', index=None, encoding='utf-8')
 
     print 'Processing time = ', (datetime.datetime.now() - start_time)
 
@@ -159,8 +177,8 @@ def count_common_words(str1, str2):
 #   - length of search_term
 #   - ratio of number of common words to length of search_term
 def load_features1():
-    train_new = pd.read_csv('./dataset/train_new1.csv', index_col='id')
-    test_new = pd.read_csv('./dataset/test_new1.csv', index_col='id')
+    train_new = pd.read_csv('./dataset/train_features_size.csv', index_col='id')
+    test_new = pd.read_csv('./dataset/test_features_size.csv', index_col='id')
 
     numtrain = train_new.shape[0]
     data = pd.concat([train_new, test_new], axis=0)
@@ -178,6 +196,10 @@ def load_features1():
         new_df.at[index, 'words_in_brand'] = count_common_words(row['brand'], row['search_term'])
         new_df.at[index, 'words_in_color'] = count_common_words(row['color'], row['search_term'])
         new_df.at[index, 'words_in_material'] = count_common_words(row['material'], row['search_term'])
+        '''new_df.at[index, 'words_in_size'] = count_common_words(row['size'], row['search_term'])
+        new_df.at[index, 'words_in_weight'] = count_common_words(row['weight'], row['search_term'])
+        new_df.at[index, 'words_in_volt'] = count_common_words(row['volt'], row['search_term'])
+        new_df.at[index, 'words_in_watt'] = count_common_words(row['watt'], row['search_term'])'''
         new_df.at[index, 'whole_query_in_title'] = 1 if row['search_term'] in row['product_title'] else 0
         new_df.at[index, 'whole_query_in_descr'] = 1 if row['search_term'] in row['descr'] else 0
 
@@ -187,6 +209,10 @@ def load_features1():
     new_df['ratio_brand'] = new_df['words_in_brand']/new_df['query_len']
     new_df['ratio_color'] = new_df['words_in_color']/new_df['query_len']
     new_df['ratio_material'] = new_df['words_in_material']/new_df['query_len']
+    '''new_df['ratio_size'] = new_df['words_in_size']/new_df['query_len']
+    new_df['ratio_weight'] = new_df['words_in_weight']/new_df['query_len']
+    new_df['ratio_volt'] = new_df['words_in_volt']/new_df['query_len']
+    new_df['ratio_watt'] = new_df['words_in_watt']/new_df['query_len']'''
 
     new_df = new_df.drop('fake', axis=1)
 
@@ -194,5 +220,10 @@ def load_features1():
     test_new_processed = new_df[numtrain:].copy()
 
     train_new_processed['relevance'] = train_new['relevance']
+
+
+    #word_vec = pd.read_csv('./src/features/train_word2vec_features_title_descr.csv')
+    #word_vec = word_vec.set_index(train_new_processed.index)
+    #train_new_processed = pd.concat([train_new_processed, word_vec], axis=1)
 
     return train_new_processed, test_new_processed
