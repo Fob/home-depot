@@ -82,7 +82,7 @@ def value_transformer(c, v, skip_stop_words=True, enable_stemming=True):
     return av
 
 
-def search_transformer(v, skip_stop_words=True):
+def search_transformer(v, skip_stop_words=True, enable_stemming=True):
     v = str(v).lower()
     v = v.decode('utf-8', 'ignore')
     v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
@@ -99,21 +99,23 @@ def search_transformer(v, skip_stop_words=True):
             avs = avs | ws
     if skip_stop_words: avs = avs - stop_words - av
 
-    stemmer = PorterStemmer()
-    av = set([stemmer.stem(w) for w in av])
-    if skip_stop_words: av = av - stop_words
+    if enable_stemming:
+        stemmer = PorterStemmer()
+        av = set([stemmer.stem(w) for w in av])
+        if skip_stop_words: av = av - stop_words
 
-    avs = set([stemmer.stem(w) for w in avs])
-    if skip_stop_words: avs = avs - stop_words - av
+        avs = set([stemmer.stem(w) for w in avs])
+        if skip_stop_words: avs = avs - stop_words - av
     return av, avs
 
 
 def serialize_attr(x):
-    if type(x) is float: return None
-    str_val = ''
-    for y in x:
-        str_val += y + ' '
-    return str_val.strip(' ')
+    if type(x) is set:
+        str_val = ''
+        for y in x:
+            str_val += y + ' '
+        return str_val.strip(' ')
+    return x
 
 
 def deserialize_attr(x):
@@ -247,6 +249,59 @@ def internal_enrich_features(data, product_to_trace, skip_stop_words, p2a):
     return x, x_derivatives
 
 
+def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=True, enable_stemming=True):
+    file_name = './dataset/word_set.' + data_file + '.'
+    if skip_stop_words:
+        file_name += 'stop.'
+    if enable_stemming:
+        file_name += 'stemming.'
+    file_name += 'csv'
+
+    if os.path.isfile(file_name):
+        print 'load', data_file, 'data from file'
+        data = pd.read_csv(file_name, encoding='utf-8')
+        data['search_set'] = data['search_set'].apply(deserialize_attr)
+        data['product_title'] = data['product_title'].apply(deserialize_attr)
+        data['syn_set'] = data['syn_set'].apply(deserialize_attr)
+        print 'loaded', data.shape, '->', file_name
+        return data
+
+    data = pd.read_csv('./dataset/' + data_file + '.csv')
+    columns = ['id', 'product_title', 'search_set', 'syn_set']
+    if 'relevance' in data.columns: columns.append('relevance')
+    x = DataFrame(columns=columns)
+
+    x['id'] = data['id']
+    if 'relevance' in data.columns:
+        x['relevance'] = data['relevance']
+
+    for index, row in data.iterrows():
+        if index % 10000 == 0: print index,
+        pid = int(row['product_uid'])
+        oid = int(row['id'])
+
+        is_trace_enabled = pid in product_to_trace
+        if is_trace_enabled:
+            print
+            print 'search term', pid, '(', oid, ')', '[', row['search_term'], ']'
+        x.at[index, 'search_set'], x.at[index, 'syn_set'] = search_transformer(row['search_term'],
+                                                                               skip_stop_words, enable_stemming)
+        if is_trace_enabled: print 'search set', pid, '(', oid, ')', x.at[index, 'search_set']
+        if is_trace_enabled: print 'syn set', pid, '(', oid, ')', x.at[index, 'syn_set']
+
+        if is_trace_enabled: print 'product title', pid, '(', oid, ')', '[', row['product_title'], ']'
+        x.at[index, 'product_title'] = value_transformer('product_title', row['product_title'],
+                                                         skip_stop_words, enable_stemming)
+        if is_trace_enabled: print 'product title', pid, '(', oid, ')', '[', x.at[index, 'product_title'], ']'
+
+    print
+    print 'store word set'
+    x_serialized = x.applymap(serialize_attr)
+    x_serialized.to_csv(file_name, encoding='utf-8', index=None)
+    print 'stored', x.shape, '->', file_name
+    return x
+
+
 def merge_word_match(x_train, x_test, merge_factor):
     x_train_merged = np.array(x_train)
     x_test_merged = np.array(x_test)
@@ -261,7 +316,7 @@ def merge_word_match(x_train, x_test, merge_factor):
     return x_train_merged, x_test_merged
 
 
-def load_raw_features(product_to_trace, skip_stop_words, p2a):
+def load_raw(product_to_trace, skip_stop_words, p2a):
     train_data = pd.read_csv('./dataset/train.csv')
     y_train = train_data['relevance']
     id_train = train_data['id']
@@ -280,9 +335,9 @@ def load_features(merge_factor=20, product_to_trace=None, skip_stop_words=True, 
     if product_to_trace is None: product_to_trace = {}
     if p2a is None: p2a = product2attrs()
 
-    x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_raw_features(product_to_trace,
-                                                                                        skip_stop_words,
-                                                                                        p2a)
+    x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_raw(product_to_trace,
+                                                                               skip_stop_words,
+                                                                               p2a)
 
     x_train, x_test = merge_word_match(x_train, x_test, merge_factor)
     print 'after merge', x_train.shape, x_test.shape
