@@ -1,4 +1,5 @@
 import itertools as it
+import os.path
 import re
 
 import nltk.corpus as corpus
@@ -60,7 +61,7 @@ def column_transformer(x, combine=True):
     return c
 
 
-def value_transformer(c, v, skip_stop_words=True):
+def value_transformer(c, v, skip_stop_words=True, enable_stemming=True):
     v = str(v).lower()
     if c in boolean_columns:
         if v.startswith('y'):
@@ -74,8 +75,9 @@ def value_transformer(c, v, skip_stop_words=True):
     av = set(re.split('[\s,\)\(\xb0\?]', v))
     if skip_stop_words:
         av = av - stop_words
-    stemmer = PorterStemmer()
-    av = set([stemmer.stem(w) for w in av])
+    if enable_stemming:
+        stemmer = PorterStemmer()
+        av = set([stemmer.stem(w) for w in av])
     return av
 
 
@@ -105,8 +107,18 @@ def search_transformer(v, skip_stop_words=True):
     return av, avs
 
 
-def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
+def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, enable_stemming=True):
     if product_to_trace is None: product_to_trace = {}
+    file_name = './dataset/product_to_attributes.'
+    if combine: file_name += 'combined.'
+    if skip_stop_words: file_name += 'stop.'
+    if enable_stemming: file_name += 'stemming.'
+    file_name += 'csv'
+
+    if os.path.isfile(file_name):
+        rs = pd.read_csv(file_name)
+        print 'load', file_name, rs.shape
+
     attrs = pd.read_csv('./dataset/attributes.csv')
     attrs = attrs[attrs['product_uid'] == attrs['product_uid']]
     descrs = pd.read_csv('./dataset/product_descriptions.csv')
@@ -136,8 +148,8 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
         current = rs.at[id, cc]
         rs.at[id, cc] = to_set(current) | cv
         if is_trace_enabled: print cc, id, '->', rs.at[id, cc]
-    print
 
+    print
     print 'descriptions :', descrs.shape
 
     for index, row in descrs.iterrows():
@@ -153,9 +165,10 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True):
         rs.at[id, 'bullet'] = to_set(current) | value_transformer('bullet',
                                                                   row['product_description'], skip_stop_words)
         if is_trace_enabled: print 'bullet', id, '->', rs.at[id, 'bullet']
-    print
 
+    print
     print 'result:', rs.shape
+    rs.to_csv(file_name)
     return rs
 
 
@@ -168,7 +181,7 @@ def count_words(data, search):
 def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_words, p2a):
     attrs_len = len(p2a.columns)
     x = np.zeros((data.shape[0], attrs_len), dtype=np.float)
-    x_derivatives = np.zeros((data.shape[0], 3), dtype=np.float)
+    x_derivatives = np.zeros((data.shape[0], 4), dtype=np.float)
     column_names = p2a.columns
     for index, row in data.iterrows():
         if index % 10000 == 0: print index,
@@ -195,7 +208,7 @@ def internal_enrich_features(data, product_to_trace, id_to_trace, skip_stop_word
             x_derivatives[index, 0] += np.sum(attrs.apply(lambda d: count_words(d, syn_set)))
 
         # title to bullet
-        x[index, 0] += count_words(product_title, search_set)
+        x[index, 4] += count_words(product_title, search_set)
         # title to synonyms combo
         x_derivatives[index, 0] += count_words(product_title, syn_set)
         x_derivatives[index, 1] = len(search_set)

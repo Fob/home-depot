@@ -8,11 +8,11 @@ from src.features.features2strmatrix import load_features
 from src.features.features2strmatrix import product2attrs
 
 p_to_a = product2attrs()
-X_train, y_train, X_test, id_train, id_test = load_features(p2a=p_to_a, merge_factor=150)
+X_train, y_train, X_test, id_train, id_test = load_features(p2a=p_to_a, merge_factor=0)
 
 a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 # alphas=[0.1 * x for x in a],
-clf = ln.Ridge(alpha=[0.001 * x for x in a], normalize=True)
+clf = ln.RidgeCV(alphas=[0.001 * x for x in a], normalize=True)
 clf.fit(X_train, y_train)
 
 y_predicted = clf.predict(X_train)
