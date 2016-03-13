@@ -99,17 +99,20 @@ test_descr = test_data['descr']
 test_descr_sentences = [row.split() for row in test_descr]
 descr_sentences = train_descr_sentences + test_descr_sentences
 descr_model = Word2Vec(descr_sentences, min_count=1, workers=cores, alpha=0.025, min_alpha=0.025)
-for n in range(10):
+for n in range(30):
     print n
     descr_model.train(sentences=descr_sentences)
+descr_model_filename = "./src/features/descr_word2vec_model.model"
+descr_model.save(descr_model_filename)
 
 descr_model.most_similar('bosch')
 descr_model.most_similar('makita')
 descr_model.most_similar('drill')
 
 descr_model_filename = "./src/features/descr_word2vec_model.model"
-descr_model.save(descr_model_filename)
 descr_loaded_model = Word2Vec.load(descr_model_filename)
+descr_model = descr_loaded_model
+#descr_model.save(descr_model_filename)
 
 # generate features
 descr_loaded_model = Word2Vec.load(descr_model_filename)
@@ -137,12 +140,6 @@ print sim_value_prod_descr.shape
 
 
 
-#----------------------------------------------------------------------------------
-# TRAIN
-# SAVE NEW FEATURES FOR TRAIN TO FILE
-
-new_features_train = pd.DataFrame({'similarity_search_title': sim_value_prod_title, 'similarity_search_prod_descr': sim_value_prod_descr})
-new_features_train.to_csv('./src/features/train_word2vec_features_title_descr.csv', index=None)
 
 
 
@@ -160,35 +157,67 @@ title_loaded_model = Word2Vec.load(prod_title_model_filename)
 descr_model_filename = "./src/features/descr_word2vec_model.model"
 descr_loaded_model = Word2Vec.load(descr_model_filename)
 
+current_data = train_data
 
 sim_value_prod_descr = []
 sim_value_prod_title = []
-for n in range(len(test_data)):
-    row_n = test_data.iloc[n]
+for n in range(len(current_data)):
+    row_n = current_data.iloc[n]
     descr = row_n['descr'].split()
     prod_title = row_n['product_title'].split()
     search_term = row_n['search_term'].split()
+
+    descr_sim_value = 0
+    title_sim_value = 0
+    for term in search_term:
+        sim_descr_sum = 0
+        sim_title_sum = 0
+        #descr
+        if term in descr_loaded_model.vocab:
+            for descr_part in descr:
+                sim_descr_sum  = sim_descr_sum  + descr_loaded_model.similarity(term, descr_part)
+        descr_sim_value = descr_sim_value + sim_descr_sum
+        #title
+        if term in title_loaded_model.vocab:
+            for title_part in prod_title:
+                sim_title_sum  = sim_title_sum  + title_loaded_model.similarity(term, title_part)
+        title_sim_value = title_sim_value + sim_title_sum
+
+    descr_sim_value = descr_sim_value/len(search_term)
+    title_sim_value = descr_sim_value/len(search_term)
+
+    sim_value_prod_descr = np.append(sim_value_prod_descr, descr_sim_value)
+    sim_value_prod_title = np.append(sim_value_prod_title, title_sim_value)
+
     #title
-    if all(term in title_loaded_model.vocab for term in search_term):
-        sim_value_prod_title = np.append(sim_value_prod_title, title_loaded_model.n_similarity(search_term, prod_title))
-    else:
-        sim_value_prod_title = np.append(sim_value_prod_title, 0)
-
+#    if all(term in title_loaded_model.vocab for term in search_term):
+#        sim_value_prod_title = np.append(sim_value_prod_title, title_loaded_model.n_similarity(search_term, prod_title))
+#    else:
+#        sim_value_prod_title = np.append(sim_value_prod_title, 0)
     #descr
-    if all(term in descr_loaded_model.vocab for term in search_term):
-        sim_value_prod_descr = np.append(sim_value_prod_descr, descr_loaded_model.n_similarity(search_term, descr))
-    else:
-        sim_value_prod_descr = np.append(sim_value_prod_descr, 0)
+#    if all(term in descr_loaded_model.vocab for term in search_term):
+#        sim_value_prod_descr = np.append(sim_value_prod_descr, descr_loaded_model.n_similarity(search_term, descr))
+#    else:
+#        sim_value_prod_descr = np.append(sim_value_prod_descr, 0)
 
-    if n%10000 == 0:
-        print len(test_data) - n
-#    print n
-#    print search_term
-#    print prod_title
-#    print value_prod_desc
-#    print '---------------'
+    if n%1000 == 0:
+        print len(current_data) - n
+
+
+#----------------------------------------------------------------------------------
+# TRAIN
+# SAVE NEW FEATURES FOR TRAIN TO FILE
+
+new_features_train = pd.DataFrame({'similarity_search_title': sim_value_prod_title, 'similarity_search_prod_descr': sim_value_prod_descr})
+new_features_train.to_csv('./src/features/word2vec_features_bywords_train.csv', index=None)
+
+
+#----------------------------------------------------------------------------------
+# TEST
+# SAVE NEW FEATURES FOR TEST TO FILE
 
 new_features_test = pd.DataFrame({'similarity_search_title': sim_value_prod_title, 'similarity_search_prod_descr': sim_value_prod_descr})
-new_features_test.to_csv('./src/features/test_word2vec_features_title_descr.csv', index=None)
+new_features_test.to_csv('./src/features/word2vec_features_bywords_test.csv', index=None)
+
 
 #----------------------------------------------------------------------------------
