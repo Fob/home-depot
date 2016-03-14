@@ -12,14 +12,15 @@ from sklearn import linear_model
 from sklearn.feature_extraction.text import CountVectorizer
 
 from src.algos.utils import rmse
+from src.features.sets import blank
 from src.features.sets import boolean_columns
 from src.features.sets import get_syn
 from src.features.sets import stop_words
 
 
 def to_set(x):
-    if type(x) is float: return set([])
-    return x
+    if type(x) is set: return x
+    return blank
 
 
 def column_transformer(x, combine=True):
@@ -196,8 +197,22 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
 
 
 def count_words(data, search):
-    if type(data) is set:
-        return len(data & search)
+    if type(data) is not set: return 0
+    return len(data & search)
+
+
+def count_words_unsafe(data, search):
+    return len(data & search)
+
+
+def count_words_vectorized(s):
+    if type(s[0]) is not set: return 0
+    if type(s[1]) is not set: return 0
+    return len(s[0] & s[1])
+
+
+def safe_len(s):
+    if type(s) is set: return len(s)
     return 0
 
 
@@ -250,6 +265,8 @@ def internal_enrich_features(data, product_to_trace, skip_stop_words, p2a):
 
 
 def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=True, enable_stemming=True):
+    if product_to_trace is None: product_to_trace = set([])
+
     file_name = './dataset/word_set.' + data_file + '.'
     if skip_stop_words:
         file_name += 'stop.'
@@ -267,11 +284,12 @@ def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=T
         return data
 
     data = pd.read_csv('./dataset/' + data_file + '.csv')
-    columns = ['id', 'product_title', 'search_set', 'syn_set']
+    columns = ['id', 'product_uid', 'product_title', 'search_set', 'syn_set']
     if 'relevance' in data.columns: columns.append('relevance')
     x = DataFrame(columns=columns)
 
     x['id'] = data['id']
+    x['product_uid'] = data['product_uid']
     if 'relevance' in data.columns:
         x['relevance'] = data['relevance']
 
@@ -345,6 +363,59 @@ def load_features(merge_factor=20, product_to_trace=None, skip_stop_words=True, 
     x_test = np.hstack((x_test, x_ts_der))
 
     return x_train, y_train, x_test, id_train, id_test
+
+
+def match_features(p_to_a=None, data_file='train'):
+    if p_to_a is None: p_to_a = product2attrs()
+    file_name = './dataset/raw_features.' + data_file + '.csv'
+
+    if os.path.isfile(file_name):
+        print 'load', data_file, 'data from file'
+        features = pd.read_csv(file_name)
+        print 'loaded', features.shape, '->', file_name
+        return features
+
+    data = prepare_word_set(data_file)
+    attrs = p_to_a.columns
+    columns = np.r_[['id'], attrs.values, ['product_title', 'synonyms', 'search_len']]
+
+    if 'relevance' in data.columns:
+        columns = np.r_[columns, ['relevance']]
+
+    features = DataFrame(columns=columns)
+
+    features['id'] = data['id']
+
+    features['search_len'] = data['search_set'].apply(safe_len)
+    features['product_title'] = data[['product_title', 'search_set']].apply(count_words_vectorized, axis=1,
+                                                                            reduce=True, raw=True)
+    features = features.fillna(0.0)
+    print 'process attributes'
+
+    tmp = np.zeros((data.shape[0], len(attrs)))
+    syn_sets = np.zeros((data.shape[0], 1))
+    for index, row in data.iterrows():
+        if index % 10000 == 0: print index,
+        pid = row['product_uid']
+        search_set = row['search_set']
+        if type(search_set) is not set: continue
+        values = p_to_a.loc[pid]
+        tmp[index] = values.apply(lambda d: count_words(d, search_set))
+
+        syn_set = row['syn_set']
+        if type(syn_set) is not set: continue
+        syn_sets[index] = np.sum(values.apply(lambda d: count_words(d, syn_set)))
+
+    print
+    print 'integrate features with attributes'
+    features[attrs] = tmp
+    features['syn_set'] = syn_sets
+    if 'relevance' in features.columns:
+        features['relevance'] = data['relevance']
+    print 'store features'
+    features.to_csv(file_name, index=None)
+    print 'stored', features.shape, '->', file_name
+    return features
 
 
 def product_search_vectorize(product_vectorizer, search_term_vectorizer, data):
