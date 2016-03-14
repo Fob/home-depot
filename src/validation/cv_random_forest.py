@@ -36,13 +36,22 @@ from src.algos.utils import RMSE
 
 train_df, test_df = ext_c_ft.load_features1()
 
-X_train = train_df.ix[:, :'ratio_material'].values
+# ADD Word2Vec Columns
+import src.features.get_count_features_by_word2vec as w2v
+w2v_features_train = w2v.get_count_features_by_word2vec('./dataset/train_new1.csv', 0.7)
+#w2v_features_train.iloc[0]
+train_df[['ratio_in_descr_w2v', 'ratio_in_title_w2v', 'words_in_descr_w2v', 'words_in_title_w2v']] = w2v_features_train
+#train_df.iloc[0]
+
+
+#X_train = train_df.ix[:, :'ratio_material'].values
+X_train = train_df.ix[:, train_df.columns != 'relevance'].values
 y_train = train_df['relevance'].values
 X_test = test_df.ix[:, :'ratio_material'].values
 
 
 cv = KFold(len(y_train), n_folds=5, shuffle=True, random_state=23)
-for n_tree in [100, 200, 300, 400, 500]:
+for n_tree in [100]:
     clf = RandomForestRegressor(n_estimators=n_tree, n_jobs=-1, random_state=42)
     score = cross_val_score(clf, X_train, y_train, scoring=RMSE, cv=cv)
     print 'CV score = %f for %d trees' % (score.mean(), n_tree)

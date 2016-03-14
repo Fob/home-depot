@@ -221,3 +221,9 @@ new_features_test.to_csv('./src/features/word2vec_features_bywords_test.csv', in
 
 
 #----------------------------------------------------------------------------------
+# Test getSimilarWords
+
+import src.features.getSimilarWords as sim
+sim.getSimilarWords('makita', 'description', 0.5)
+
+#----------------------------------------------------------------------------------
