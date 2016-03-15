@@ -26,26 +26,29 @@ y_train = features['relevance']
 
 X_train = features_to_x(features_normalized)
 
+cv = KFold(len(y_train), n_folds=5)
 a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 # alphas=[0.1 * x for x in a],
-clf = ln.RidgeCV(alphas=[0.001 * x for x in a], normalize=True)
+clf = ln.RidgeCV(alphas=[0.001 * x for x in a], normalize=True, cv=cv, scoring=RMSE_NORMALIZED)
 clf.fit(X_train, y_train)
 
 y_predicted = clf.predict(X=X_train)
 y_predicted[y_predicted < 1] = 1
 y_predicted[y_predicted > 3] = 3
 print 'full train error', rmse(y_train, y_predicted)
+print 'alpha:', clf.alpha_
 # 0.511923394592
 # 0.512527745792
 # 0.512562155434
 # 0.512698447827
 # 0.496877387728
 
-cv = KFold(len(y_train), n_folds=5)
 print 'cross validation score', cross_validation.cross_val_score(
-    ln.Ridge(alpha=0.007, normalize=True), X_train, y_train, scoring=RMSE_NORMALIZED, cv=cv).mean()
+    ln.Ridge(alpha=0.005, normalize=True), X_train, y_train, scoring=RMSE_NORMALIZED, cv=cv).mean()
 # cc = np.hstack((p_to_a.columns, 'syn_combo'))
 # print len(cc[np.sum(X_train, axis=0) == 0])
 # -0.502024170078
 # -0.502024170078
 # -0.501908125014
+# -0.501912777487
+# -0.501904385699
