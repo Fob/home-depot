@@ -460,4 +460,12 @@ def product_search_regression(p2a, a=100000.0):
 
     return y_predicted, y_test
 
+
+def features_to_x(features):
+    columns = features.columns
+    columns = columns[np.all([columns[:] != 'relevance',
+                              columns[:] != 'id'], axis=0)]
+    x = features[columns]
+    return x
+
 # x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_features(product_to_trace={100001})
