@@ -366,7 +366,6 @@ def load_features(merge_factor=20, product_to_trace=None, skip_stop_words=True, 
 
 
 def match_features(p_to_a=None, data_file='train'):
-    if p_to_a is None: p_to_a = product2attrs()
     file_name = './dataset/raw_features.' + data_file + '.csv'
 
     if os.path.isfile(file_name):
@@ -375,6 +374,7 @@ def match_features(p_to_a=None, data_file='train'):
         print 'loaded', features.shape, '->', file_name
         return features
 
+    if p_to_a is None: p_to_a = product2attrs()
     data = prepare_word_set(data_file)
     attrs = p_to_a.columns
     columns = np.r_[['id'], attrs.values, ['product_title', 'synonyms', 'search_len']]
