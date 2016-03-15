@@ -10,7 +10,7 @@ from src.algos.utils import RMSE_NORMALIZED
 from src.algos.utils import rmse
 from src.features.features2strmatrix import features_to_x
 from src.features.features2strmatrix import match_features
-from src.features.features2strmatrix import product2attrs
+from src.features.features2strmatrix import zero_normalization
 
 # Logging
 program = os.path.basename(sys.argv[0])
@@ -18,13 +18,13 @@ logger = logging.getLogger(program)
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s')
 logging.root.setLevel(level=logging.INFO)
 # Main
-p_to_a = product2attrs()
-features = match_features(p_to_a, 'train')
+features = match_features()
+features_normalized = zero_normalization(features)
 # test = prepare_word_set('test')
 
 y_train = features['relevance']
 
-X_train = features_to_x(features)
+X_train = features_to_x(features_normalized)
 
 a = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
 # alphas=[0.1 * x for x in a],
@@ -48,3 +48,4 @@ print 'cross validation score', cross_validation.cross_val_score(
 # print len(cc[np.sum(X_train, axis=0) == 0])
 # -0.502024170078
 # -0.502024170078
+# -0.501908125014

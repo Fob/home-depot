@@ -468,4 +468,27 @@ def features_to_x(features):
     x = features[columns]
     return x
 
+
+def zero_normalization(features, merge=True):
+    file_name = './dataset/zero_normalization.csv'
+
+    if os.path.isfile(file_name):
+        print 'load', file_name, 'data from file'
+        indexes = pd.Series.from_csv(file_name)
+        print 'loaded', indexes.shape, '->', file_name
+    else:
+        if 'relevance' not in features.columns: raise Exception('process train features before test')
+        indexes = features.apply(np.sum, axis=0) > 0
+        print 'store indexes'
+        indexes.to_csv(file_name)
+        print 'stored', indexes.shape, '->', file_name
+
+    if merge:
+        features = features.copy(deep=True)
+        features['bullet'] += features[features.columns[indexes == False]].apply(np.sum, axis=1)
+
+        features = features[features.columns[indexes]]
+        print 'zero normalized', features.shape
+        return features
+
 # x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_features(product_to_trace={100001})
