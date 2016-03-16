@@ -5,13 +5,12 @@ import re
 import nltk.corpus as corpus
 import numpy as np
 import pandas as pd
-import scipy.sparse as sci
+import sklearn.linear_model as ln
 from nltk import PorterStemmer
 from pandas import DataFrame
-from sklearn import linear_model
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn import cross_validation
 
-from src.algos.utils import rmse
+from src.algos.utils import RMSE_NORMALIZED
 from src.features.sets import blank
 from src.features.sets import boolean_columns
 from src.features.sets import get_syn
@@ -320,51 +319,6 @@ def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=T
     return x
 
 
-def merge_word_match(x_train, x_test, merge_factor):
-    x_train_merged = np.array(x_train)
-    x_test_merged = np.array(x_test)
-
-    indx = np.sum(x_train_merged, axis=0) < merge_factor
-    print 'merge columns', x_train_merged[:, indx].shape
-    x_train_merged[:, 0] = x_train_merged[:, 0] + np.sum(x_train_merged[:, indx], axis=1)
-    x_train_merged = x_train_merged[:, indx == False]
-
-    x_test_merged[:, 0] = x_test_merged[:, 0] + np.sum(x_test_merged[:, indx], axis=1)
-    x_test_merged = x_test_merged[:, indx == False]
-    return x_train_merged, x_test_merged
-
-
-def load_raw(product_to_trace, skip_stop_words, p2a):
-    train_data = pd.read_csv('./dataset/train.csv')
-    y_train = train_data['relevance']
-    id_train = train_data['id']
-    print 'preparing training features:', train_data.shape
-    x_train, x_tr_der = internal_enrich_features(train_data, product_to_trace, skip_stop_words, p2a)
-
-    test_data = pd.read_csv('./dataset/test.csv')
-    id_test = test_data['id']
-    print 'preparing test features:', test_data.shape
-    x_test, x_ts_der = internal_enrich_features(test_data, product_to_trace, skip_stop_words, p2a)
-
-    return x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test
-
-
-def load_features(merge_factor=20, product_to_trace=None, skip_stop_words=True, p2a=None):
-    if product_to_trace is None: product_to_trace = {}
-    if p2a is None: p2a = product2attrs()
-
-    x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_raw(product_to_trace,
-                                                                               skip_stop_words,
-                                                                               p2a)
-
-    x_train, x_test = merge_word_match(x_train, x_test, merge_factor)
-    print 'after merge', x_train.shape, x_test.shape
-    x_train = np.hstack((x_train, x_tr_der))
-    x_test = np.hstack((x_test, x_ts_der))
-
-    return x_train, y_train, x_test, id_train, id_test
-
-
 def match_features(p_to_a=None, data_file='train'):
     file_name = './dataset/raw_features.' + data_file + '.csv'
 
@@ -409,56 +363,13 @@ def match_features(p_to_a=None, data_file='train'):
     print
     print 'integrate features with attributes'
     features[attrs] = tmp
-    features['syn_set'] = syn_sets
+    features['synonyms'] = syn_sets
     if 'relevance' in features.columns:
         features['relevance'] = data['relevance']
     print 'store features'
     features.to_csv(file_name, index=None)
     print 'stored', features.shape, '->', file_name
     return features
-
-
-def product_search_vectorize(product_vectorizer, search_term_vectorizer, data):
-    x_product = product_vectorizer.transform([str(p) for p in data['product_uid']])
-    x_search = search_term_vectorizer.transform(data['search_term'])
-    x = sci.hstack((x_product, x_search))
-    print 'features prepared', x.shape
-    return x
-
-
-def product_to_search_features(p2a):
-    train_data = pd.read_csv('./dataset/train.csv')
-    test_data = pd.read_csv('./dataset/test.csv')
-
-    products = [str(p) for p in p2a.index]
-    product_vectorizer = CountVectorizer()
-    product_vectorizer.fit(products)
-    search_term_vectorizer = CountVectorizer()
-    search_term_vectorizer.fit(test_data['search_term'])
-
-    y_train = train_data['relevance']
-    id_train = train_data['id']
-    x_train = product_search_vectorize(product_vectorizer, search_term_vectorizer, train_data)
-
-    id_test = test_data['id']
-    x_test = product_search_vectorize(product_vectorizer, search_term_vectorizer, test_data)
-    return x_train, y_train, x_test, id_train, id_test
-
-
-def product_search_regression(p2a, a=100000.0):
-    print 'product to search regression'
-    x_train, y_train, x_test, id_train, id_test = product_to_search_features(p2a=p2a)
-
-    clf = linear_model.ElasticNet(alpha=a, normalize=True)
-    clf.fit(x_train, y_train)
-
-    y_predicted = clf.predict(x_train)
-
-    y_test = clf.predict(x_test)
-
-    print 'regression train reult', rmse(y_train, y_predicted), y_predicted.shape, y_test.shape
-
-    return y_predicted, y_test
 
 
 def features_to_x(features):
@@ -487,8 +398,90 @@ def zero_normalization(features, merge=True):
         features = features.copy(deep=True)
         features['bullet'] += features[features.columns[indexes == False]].apply(np.sum, axis=1)
 
-        features = features[features.columns[indexes]]
-        print 'zero normalized', features.shape
-        return features
+    features = features[features.columns[indexes]]
+    print 'zero normalized', features.shape
+    return features
 
-# x_train, x_tr_der, y_train, x_test, x_ts_der, id_train, id_test = load_features(product_to_trace={100001})
+
+def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True), allow_merge=False):
+    features = features.copy(deep=True)
+    file_name = './dataset/mask.' + mask_name + '.csv'
+
+    if os.path.isfile(file_name):
+        print 'load', file_name, 'data from file'
+        mask = pd.Series.from_csv(file_name)
+        print 'loaded', mask.shape, '->', file_name
+
+        col_to_merge = features.columns[mask == 'M']
+        if len(col_to_merge) > 0:
+            features['bullet'] += features[col_to_merge].apply(np.sum, axis=1)
+
+        result_features = features[features.columns[mask == 'F']]
+        return result_features
+    print 'source', features.shape
+    score = -100000000000
+    mask = features.loc[features.index[0]].apply(lambda x: 'D')
+    mask['relevance'] = 'F'
+    mask['id'] = 'F'
+    mask['product_title'] = 'F'
+
+    y = features['relevance']
+    print 'add features', score
+    for i, feature in enumerate(mask.index[mask == 'D']):
+        print 'add', feature,
+        mask[feature] = 'F'
+        filtered = features[features.columns[mask == 'F']]
+        print filtered.shape
+        s = cross_validation.cross_val_score(cls, features_to_x(filtered), y, scoring=RMSE_NORMALIZED, cv=5).mean()
+        print 'calculated score', s,
+        if s > score:
+            score = s
+            print 'accept feature', feature
+        else:
+            mask[feature] = 'D'
+            print 'reject feature', feature
+
+    print 'remove features', score
+    for feature in mask.index[mask == 'F']:
+        if feature in {'relevance', 'id'}: continue
+        print 'remove', feature,
+        mask[feature] = 'D'
+        filtered = features[features.columns[mask == 'F']]
+        print filtered.shape
+        s = cross_validation.cross_val_score(cls, features_to_x(filtered), y, scoring=RMSE_NORMALIZED, cv=5).mean()
+        print 'calculated score', s,
+        if s > score:
+            score = s
+            print 'reject feature', feature
+        else:
+            mask[feature] = 'F'
+            print 'rollback feature', feature
+
+    if allow_merge:
+        print 'merge features', score
+        unmerged = {'relevance', 'id', 'bullet', 'search_len', 'synonyms'}
+        for i, feature in enumerate(mask.index):
+            if feature in unmerged: continue
+            print 'merge', feature,
+            backup = mask[feature]
+            mask[feature] = 'M'
+            features['bullet'] += features[feature]
+            filtered = features[features.columns[mask == 'F']]
+            print filtered.shape
+            s = cross_validation.cross_val_score(cls, features_to_x(filtered), y, scoring=RMSE_NORMALIZED, cv=5).mean()
+            print 'calculated score', s,
+            if s > score:
+                score = s
+                print 'merge feature', feature
+            elif (s == score) and (backup == 'D'):
+                print 'merge feature', feature
+            else:
+                mask[feature] = backup
+                features['bullet'] -= features[feature]
+                print 'rollback feature', feature
+
+    result_features = features[features.columns[mask == 'F']]
+    print 'store', mask.shape, '->', file_name
+    mask.to_csv(file_name)
+    print 'result score', score, result_features.shape
+    return result_features
