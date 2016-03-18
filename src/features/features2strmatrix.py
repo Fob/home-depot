@@ -403,7 +403,21 @@ def zero_normalization(features, merge=True):
     return features
 
 
-def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True), allow_merge=False):
+def fill_start_mask(mask, start_mask):
+    if start_mask is None: return mask
+    file_name = './dataset/mask.' + start_mask + '.csv'
+    if not os.path.isfile(file_name): raise Exception('can not find start mask')
+    print 'load', file_name, 'data from file'
+    start_mask = pd.Series.from_csv(file_name)
+    print 'loaded', start_mask.shape, '->', file_name
+    for col in mask.index:
+        if col in start_mask.index:
+            mask[col] = start_mask[col]
+    print 'start mask applied'
+    return mask
+
+
+def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True), allow_merge=False, start_mask=None):
     features = features.copy(deep=True)
     file_name = './dataset/mask.' + mask_name + '.csv'
 
@@ -419,13 +433,16 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
         result_features = features[features.columns[mask == 'F']]
         return result_features
     print 'source', features.shape
-    score = -100000000000
     mask = features.loc[features.index[0]].apply(lambda x: 'D')
     mask['relevance'] = 'F'
     mask['id'] = 'F'
     mask['product_title'] = 'F'
 
+    mask = fill_start_mask(mask, start_mask)
+
     y = features['relevance']
+    score = cross_validation.cross_val_score(cls, features_to_x(features[features.columns[mask == 'F']])
+                                             , y, scoring=RMSE_NORMALIZED, cv=5).mean()
     print 'add features', score
     for i, feature in enumerate(mask.index[mask == 'D']):
         print 'add', feature,
@@ -485,3 +502,18 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
     mask.to_csv(file_name)
     print 'result score', score, result_features.shape
     return result_features
+
+
+def apply_search_len(s):
+    if s['search_len'] == 0: return 0
+    return float(s[0]) / s['search_len']
+
+
+def normalize_search_len(features):
+    features = features.copy()
+    print 'normalization by search_len', features.shape, '->',
+    for i, col in enumerate(features.columns):
+        if col in {'id', 'relevance', 'search_len'}: continue
+        features[col + '/slennorm/'] = features[[col, 'search_len']].apply(apply_search_len, axis=1)
+    print features.shape
+    return features
