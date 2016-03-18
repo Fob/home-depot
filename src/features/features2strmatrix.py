@@ -1,20 +1,21 @@
-import itertools as it
+# import itertools as it
 import os.path
 import re
 
-import nltk.corpus as corpus
+# import nltk.corpus as corpus
 import numpy as np
 import pandas as pd
 import sklearn.linear_model as ln
-from nltk import PorterStemmer
+# from nltk import PorterStemmer
 from pandas import DataFrame
 from sklearn import cross_validation
 
 from src.algos.utils import RMSE_NORMALIZED
 from src.features.sets import blank
 from src.features.sets import boolean_columns
-from src.features.sets import get_syn
-from src.features.sets import stop_words
+# from src.features.sets import get_syn
+# from src.features.sets import stop_words
+from src.features.extract_count_features import process_str
 
 
 def to_set(x):
@@ -63,49 +64,38 @@ def column_transformer(x, combine=True):
 
 
 def value_transformer(c, v, skip_stop_words=True, enable_stemming=True):
-    v = str(v).lower()
     if c in boolean_columns:
+        v = str(v).lower()
         if v.startswith('y'):
-            v = str(c).lower()
+            v = c
         else:
             return set([])
-    v = v.decode('utf-8', 'ignore')
-    v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
-    v = re.sub('(?<!\d)/(?!\d)', ' ', v)
-    v = re.sub('&\w+;', ' ', v)
-    av = set(re.split('[\s,\)\(\xb0\?]', v))
-    if skip_stop_words:
-        av = av - stop_words
-    if enable_stemming:
-        stemmer = PorterStemmer()
-        av = set([stemmer.stem(w) for w in av])
+
+    av = set(process_str(s=v, stemming=enable_stemming, skip_stop_words=skip_stop_words).split(' '))
+    av.discard('')
     return av
 
 
 def search_transformer(v, skip_stop_words=True, enable_stemming=True):
-    v = str(v).lower()
-    v = v.decode('utf-8', 'ignore')
-    v = re.sub('(?<!\d)\.(?!\d)', ' ', v)
-    av = set(re.split('[\s,\)\(\xb0]', v))
-    # if skip_stop_words: av = av - stop_words
+    av = set(process_str(s=v, stemming=enable_stemming, skip_stop_words=skip_stop_words).split(' '))
+    av.discard('')
 
-    wn = corpus.wordnet
+    #    wn = corpus.wordnet
     avs = set([])
-    for w in av:
-        avs = avs | get_syn(w)
-        synonyms = wn.synsets(w)
-        if len(synonyms) > 0:
-            ws = set(it.chain.from_iterable(ww.lemma_names() for ww in synonyms))
-            avs = avs | ws
-    if skip_stop_words: avs = avs - stop_words - av
+    #    for w in lv.split(' '):
+    #        avs = avs | get_syn(w)
+    #        synonyms = wn.synsets(w)
+    #        if len(synonyms) > 0:
+    #            ws = set(it.chain.from_iterable(ww.lemma_names() for ww in synonyms))
+    #            avs = avs | ws
 
-    if enable_stemming:
-        stemmer = PorterStemmer()
-        av = set([stemmer.stem(w) for w in av])
-        if skip_stop_words: av = av - stop_words
+    #    if skip_stop_words:
+    #        avs = avs - stop_words - av
 
-        avs = set([stemmer.stem(w) for w in avs])
-        if skip_stop_words: avs = avs - stop_words - av
+    #    if enable_stemming:
+    #        stemmer = PorterStemmer()
+    #        avs = set([stemmer.stem(w) for w in avs])
+    #       if skip_stop_words: avs = avs - stop_words - av
     return av, avs
 
 
@@ -386,6 +376,8 @@ def zero_normalization(features, merge=True):
     if os.path.isfile(file_name):
         print 'load', file_name, 'data from file'
         indexes = pd.Series.from_csv(file_name)
+        if 'relevance' not in features.columns:
+            indexes = indexes[features.columns != 'relevance']
         print 'loaded', indexes.shape, '->', file_name
     else:
         if 'relevance' not in features.columns: raise Exception('process train features before test')
@@ -424,6 +416,8 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
     if os.path.isfile(file_name):
         print 'load', file_name, 'data from file'
         mask = pd.Series.from_csv(file_name)
+        if 'relevance' not in features.columns:
+            mask = mask[features.columns != 'relevance']
         print 'loaded', mask.shape, '->', file_name
 
         col_to_merge = features.columns[mask == 'M']
