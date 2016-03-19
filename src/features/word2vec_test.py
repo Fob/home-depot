@@ -31,8 +31,8 @@ all_prod_title = [re.sub("\s([A-Za-z]+)(\.|,)", " \\1", row_string) for row_stri
 print "filtered"
 
 #get filtered data
-train_data = pd.DataFrame(pd.read_csv('./dataset/train_test_new/train_new1.csv'))
-test_data = pd.DataFrame(pd.read_csv('./dataset/train_test_new/test_new1.csv'))
+train_data = pd.DataFrame(pd.read_csv('./dataset/train_new1.csv'))
+test_data = pd.DataFrame(pd.read_csv('./dataset/test_new1.csv'))
 cores = mlt.cpu_count()
 
 
@@ -48,7 +48,7 @@ test_prod_title = test_data['product_title']
 test_prod_title_sentences = [row.split() for row in test_prod_title]
 prod_title_sentences = train_prod_title_sentences + test_prod_title_sentences
 model = Word2Vec(prod_title_sentences, min_count=1, workers=cores, alpha=0.025, min_alpha=0.025)
-for n in range(20):
+for n in range(50):
     print n
     model.train(sentences=prod_title_sentences)
 
@@ -57,7 +57,20 @@ model.most_similar('makita')
 model.most_similar('drill')
 
 prod_title_model_filename = "./src/features/prod_title_word2vec_model.model"
-model.save(prod_title_model_filename)
+title_loaded_model.save(prod_title_model_filename)
+
+#train model
+train_prod_title = train_data['product_title']
+train_prod_title_sentences = [row.split() for row in train_prod_title]
+test_prod_title = test_data['product_title']
+test_prod_title_sentences = [row.split() for row in test_prod_title]
+prod_title_sentences = train_prod_title_sentences + test_prod_title_sentences
+prod_title_model_filename = "./src/features/prod_title_word2vec_model.model"
+title_loaded_model = Word2Vec.load(prod_title_model_filename)
+for n in range(50):
+    print n
+    title_loaded_model.train(sentences=prod_title_sentences)
+title_loaded_model.save(prod_title_model_filename)
 
 
 # generate features
@@ -99,7 +112,7 @@ test_descr = test_data['descr']
 test_descr_sentences = [row.split() for row in test_descr]
 descr_sentences = train_descr_sentences + test_descr_sentences
 descr_model = Word2Vec(descr_sentences, min_count=1, workers=cores, alpha=0.025, min_alpha=0.025)
-for n in range(30):
+for n in range(50):
     print n
     descr_model.train(sentences=descr_sentences)
 descr_model_filename = "./src/features/descr_word2vec_model.model"
@@ -113,6 +126,21 @@ descr_model_filename = "./src/features/descr_word2vec_model.model"
 descr_loaded_model = Word2Vec.load(descr_model_filename)
 descr_model = descr_loaded_model
 #descr_model.save(descr_model_filename)
+
+#train model
+train_descr = train_data['descr']
+train_descr_sentences = [row.split() for row in train_descr]
+test_descr = test_data['descr']
+test_descr_sentences = [row.split() for row in test_descr]
+descr_sentences = train_descr_sentences + test_descr_sentences
+descr_model_filename = "./src/features/descr_word2vec_model.model"
+descr_loaded_model = Word2Vec.load(descr_model_filename)
+for n in range(50):
+    print n
+    descr_loaded_model.train(sentences=descr_sentences)
+descr_loaded_model.save(descr_model_filename)
+descr_loaded_model.most_similar('bracket')
+
 
 # generate features
 descr_loaded_model = Word2Vec.load(descr_model_filename)
@@ -227,3 +255,24 @@ import src.features.getSimilarWords as sim
 sim.getSimilarWords('makita', 'description', 0.5)
 
 #----------------------------------------------------------------------------------
+#TRAIN WHOLE MODEL: TITLE+DESCRIPTION
+#----------------------------------------------------------------------------------
+train_prod_title = train_data['product_title']
+train_prod_title_sentences = [row.split() for row in train_prod_title]
+test_prod_title = test_data['product_title']
+test_prod_title_sentences = [row.split() for row in test_prod_title]
+prod_title_sentences = train_prod_title_sentences + test_prod_title_sentences
+descr_model_filename = "./src/features/descr_word2vec_model.model"
+descr_loaded_model = Word2Vec.load(descr_model_filename)
+for n in range(5):
+    print n
+    descr_loaded_model.train(sentences=prod_title_sentences, min_count=1)
+whole_model_filename = "./src/features/word2vec_model_whole.model"
+descr_loaded_model.save(whole_model_filename)
+
+(descr_loaded_model['makita']+descr_loaded_model['bosch'])/2
+
+
+#----------------------------------------------------------------------------------
+
+

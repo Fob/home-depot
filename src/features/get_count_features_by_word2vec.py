@@ -27,10 +27,10 @@ def get_count_features_by_word2vec(filename, threshold):
         for term in search:
             #title
             if term in w2v_title.vocab:
-                title_count_value = title_count_value + np.sum([w2v_title.similarity(term, part)>=threshold for part in title])
+                title_count_value = title_count_value + np.sum([(w2v_title.similarity(term, part)>=threshold) & (term!=part) for part in title])
             #description
             if term in w2v_descr.vocab:
-                descr_count_value = descr_count_value + np.sum([w2v_descr.similarity(term, part)>=threshold for part in descr])
+                descr_count_value = descr_count_value + np.sum([(w2v_descr.similarity(term, part)>=threshold) & (term!=part) for part in descr])
 
         features.loc[n] = np.array([ np.double(descr_count_value)/len(search), np.double(title_count_value)/len(search), descr_count_value, title_count_value])
 
