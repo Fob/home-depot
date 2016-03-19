@@ -4,6 +4,8 @@ stop_words = set(stopwords.words('english')) | {'', '&', 'x', 'ft', 'lb', 'f'}
 
 additional_syn = {'or': {'oil-rubbed', 'oil', 'rubbed'}}
 
+blank = set([])
+
 boolean_columns = {'Hooded', 'Handshower included', 'Hooks Included', 'Humidity Gauge', 'Elastic hem',
                    'Extra bulbs/fuses included', 'Cover Plate Included', 'Non marring', 'Nonconductive', 'Wood Veneer',
                    'Translucent fuel tank', 'Removes pollen', 'Tow hitch included', 'Dispenses Soap', 'Detects metal',
