@@ -193,26 +193,26 @@ def load_features1():
 
         new_df.at[index, 'words_in_title'] = count_common_words(row['product_title'], row['search_term'])
         new_df.at[index, 'words_in_descr'] = count_common_words(row['descr'], row['search_term'])
-        new_df.at[index, 'words_in_brand'] = count_common_words(row['brand'], row['search_term'])
-        new_df.at[index, 'words_in_color'] = count_common_words(row['color'], row['search_term'])
-        new_df.at[index, 'words_in_material'] = count_common_words(row['material'], row['search_term'])
-        '''new_df.at[index, 'words_in_size'] = count_common_words(row['size'], row['search_term'])
-        new_df.at[index, 'words_in_weight'] = count_common_words(row['weight'], row['search_term'])
-        new_df.at[index, 'words_in_volt'] = count_common_words(row['volt'], row['search_term'])
-        new_df.at[index, 'words_in_watt'] = count_common_words(row['watt'], row['search_term'])'''
+        new_df.at[index, 'words_in_brand'] = 1 if count_common_words(row['brand'], row['search_term'])>0 else 0
+        new_df.at[index, 'words_in_color'] = 1 if count_common_words(row['color'], row['search_term'])>0 else 0
+        new_df.at[index, 'words_in_material'] = 1 if count_common_words(row['material'], row['search_term'])>0 else 0
+        new_df.at[index, 'words_in_size'] = 1 if count_common_words(row['size'], row['search_term'])>0 else 0
+        new_df.at[index, 'words_in_weight'] = 1 if count_common_words(row['weight'], row['search_term'])>0 else 0
+        new_df.at[index, 'words_in_volt'] = 1 if count_common_words(row['volt'], row['search_term'])>0 else 0
+        new_df.at[index, 'words_in_watt'] = 1 if count_common_words(row['watt'], row['search_term'])>0 else 0
         new_df.at[index, 'whole_query_in_title'] = 1 if row['search_term'] in row['product_title'] else 0
         new_df.at[index, 'whole_query_in_descr'] = 1 if row['search_term'] in row['descr'] else 0
 
     new_df['query_len'] = data['search_term'].map(lambda x: len(x.split(" ")))
     new_df['ratio_title'] = new_df['words_in_title']/new_df['query_len']
     new_df['ratio_descr'] = new_df['words_in_descr']/new_df['query_len']
-    new_df['ratio_brand'] = new_df['words_in_brand']/new_df['query_len']
-    new_df['ratio_color'] = new_df['words_in_color']/new_df['query_len']
-    new_df['ratio_material'] = new_df['words_in_material']/new_df['query_len']
-    '''new_df['ratio_size'] = new_df['words_in_size']/new_df['query_len']
-    new_df['ratio_weight'] = new_df['words_in_weight']/new_df['query_len']
-    new_df['ratio_volt'] = new_df['words_in_volt']/new_df['query_len']
-    new_df['ratio_watt'] = new_df['words_in_watt']/new_df['query_len']'''
+    #new_df['ratio_brand'] = new_df['words_in_brand']/new_df['query_len']
+    #new_df['ratio_color'] = new_df['words_in_color']/new_df['query_len']
+    #new_df['ratio_material'] = new_df['words_in_material']/new_df['query_len']
+    #new_df['ratio_size'] = new_df['words_in_size']/new_df['query_len']
+    #new_df['ratio_weight'] = new_df['words_in_weight']/new_df['query_len']
+    #new_df['ratio_volt'] = new_df['words_in_volt']/new_df['query_len']
+    #new_df['ratio_watt'] = new_df['words_in_watt']/new_df['query_len']
 
     new_df = new_df.drop('fake', axis=1)
 
