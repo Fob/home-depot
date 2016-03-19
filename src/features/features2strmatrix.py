@@ -428,16 +428,18 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
         return result_features
     print 'source', features.shape
     mask = features.loc[features.index[0]].apply(lambda x: 'D')
-    mask['relevance'] = 'F'
-    mask['id'] = 'F'
-    mask['product_title'] = 'F'
+    if 'relevance' in mask.index: mask['relevance'] = 'F'
+    if 'id' in mask.index: mask['id'] = 'F'
 
     mask = fill_start_mask(mask, start_mask)
 
     y = features['relevance']
-    score = cross_validation.cross_val_score(cls, features_to_x(features[features.columns[mask == 'F']])
-                                             , y, scoring=RMSE_NORMALIZED, cv=5).mean()
-    print 'add features', score
+    if len(features_to_x(features[features.columns[mask == 'F']]).columns) > 0:
+        score = cross_validation.cross_val_score(cls, features_to_x(features[features.columns[mask == 'F']])
+                                                 , y, scoring=RMSE_NORMALIZED, cv=5).mean()
+    else:
+        score = -100000
+    print 'start score', score
     for i, feature in enumerate(mask.index[mask == 'D']):
         print 'add', feature,
         mask[feature] = 'F'
