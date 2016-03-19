@@ -377,7 +377,7 @@ def zero_normalization(features, merge=True):
         print 'load', file_name, 'data from file'
         indexes = pd.Series.from_csv(file_name)
         if 'relevance' not in features.columns:
-            indexes = indexes[features.columns != 'relevance']
+            indexes = indexes[indexes.index != 'relevance']
         print 'loaded', indexes.shape, '->', file_name
     else:
         if 'relevance' not in features.columns: raise Exception('process train features before test')
@@ -417,7 +417,7 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
         print 'load', file_name, 'data from file'
         mask = pd.Series.from_csv(file_name)
         if 'relevance' not in features.columns:
-            mask = mask[features.columns != 'relevance']
+            mask = mask[mask.index != 'relevance']
         print 'loaded', mask.shape, '->', file_name
 
         col_to_merge = features.columns[mask == 'M']
