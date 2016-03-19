@@ -177,8 +177,8 @@ def count_common_words(str1, str2):
 #   - length of search_term
 #   - ratio of number of common words to length of search_term
 def load_features1():
-    train_new = pd.read_csv('./dataset/train_new1.csv', index_col='id')
-    test_new = pd.read_csv('./dataset/test_new1.csv', index_col='id')
+    train_new = pd.read_csv('./dataset/train_features_size.csv', index_col='id')
+    test_new = pd.read_csv('./dataset/test_features_size.csv', index_col='id')
 
     numtrain = train_new.shape[0]
     data = pd.concat([train_new, test_new], axis=0)
