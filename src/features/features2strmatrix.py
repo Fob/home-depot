@@ -16,11 +16,18 @@ from src.features.sets import boolean_columns
 # from src.features.sets import get_syn
 # from src.features.sets import stop_words
 from src.features.extract_count_features import process_str
+from src.features.extract_count_features import load_features1
 
 
 def to_set(x):
     if type(x) is set: return x
     return blank
+
+
+def to_str(x):
+    if type(x) is str: return x
+    if type(x) is unicode: return x
+    return u''
 
 
 def column_transformer(x, combine=True):
@@ -29,11 +36,17 @@ def column_transformer(x, combine=True):
     c = c.decode('utf-8', 'ignore')
     if combine:
         if re.search(
-                '(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\)|\(mm\)|\(miles\))',
+                '(:?width|height|depth|length|size|thickness|capacity|diameter|\(in\.\)|\(ft\.\)|\(mm\))',
                 c) is not None:
             return 'combined_size'
+        if re.search('watt', c) is not None:
+            return 'combined_watt'
+        if re.search('volt', c) is not None:
+            return 'combined_volt'
         if re.search('(:?weight|\(lb\.\))', c) is not None:
             return 'combined_weight'
+        if re.search('brand', c) is not None:
+            return 'combined_brand'
         if re.search('(:?color|rgb value)', c) is not None:
             return 'combined_color'
         if re.search('material', c) is not None:
@@ -69,49 +82,10 @@ def value_transformer(c, v, skip_stop_words=True, enable_stemming=True):
         if v.startswith('y'):
             v = c
         else:
-            return set([])
+            return ''
 
-    av = set(process_str(s=v, stemming=enable_stemming, skip_stop_words=skip_stop_words).split(' '))
-    av.discard('')
+    av = process_str(s=v, stemming=enable_stemming, skip_stop_words=skip_stop_words)
     return av
-
-
-def search_transformer(v, skip_stop_words=True, enable_stemming=True):
-    av = set(process_str(s=v, stemming=enable_stemming, skip_stop_words=skip_stop_words).split(' '))
-    av.discard('')
-
-    #    wn = corpus.wordnet
-    avs = set([])
-    #    for w in lv.split(' '):
-    #        avs = avs | get_syn(w)
-    #        synonyms = wn.synsets(w)
-    #        if len(synonyms) > 0:
-    #            ws = set(it.chain.from_iterable(ww.lemma_names() for ww in synonyms))
-    #            avs = avs | ws
-
-    #    if skip_stop_words:
-    #        avs = avs - stop_words - av
-
-    #    if enable_stemming:
-    #        stemmer = PorterStemmer()
-    #        avs = set([stemmer.stem(w) for w in avs])
-    #       if skip_stop_words: avs = avs - stop_words - av
-    return av, avs
-
-
-def serialize_attr(x):
-    if type(x) is set:
-        str_val = ''
-        for y in x:
-            str_val += y + ' '
-        return str_val.strip(' ')
-    return x
-
-
-def deserialize_attr(x):
-    if type(x) is unicode:
-        return set(x.split(' '))
-    return x
 
 
 def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, enable_stemming=True):
@@ -125,7 +99,6 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
     if os.path.isfile(file_name):
         print 'load data from file'
         rs = pd.read_csv(file_name, encoding='utf-8', index_col=0)
-        rs = rs.applymap(deserialize_attr)
         print 'loaded', file_name, '->', rs.shape
         return rs
 
@@ -155,9 +128,9 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
         if is_trace_enabled:
             print
             print row['name'], id, '->', row['value']
-        cv = value_transformer(row['name'], row['value'], skip_stop_words)
+        cv = value_transformer(row['name'], row['value'], skip_stop_words, enable_stemming)
         current = rs.at[id, cc]
-        rs.at[id, cc] = to_set(current) | cv
+        rs.at[id, cc] = (to_str(current) + ' ' + cv).strip()
         if is_trace_enabled: print cc, id, '->', rs.at[id, cc]
 
     print
@@ -173,84 +146,43 @@ def product2attrs(product_to_trace=None, combine=True, skip_stop_words=True, ena
             print
             print 'product_description', id, '->', row['product_description']
         current = rs.at[id, 'bullet']
-        rs.at[id, 'bullet'] = to_set(current) | value_transformer('bullet',
-                                                                  row['product_description'], skip_stop_words)
+        rs.at[id, 'bullet'] = (to_str(current) + ' ' +
+                               value_transformer('bullet', row['product_description'],
+                                                 skip_stop_words, enable_stemming)).strip()
         if is_trace_enabled: print 'bullet', id, '->', rs.at[id, 'bullet']
 
     print
     print 'store data into file'
-    serialized_data = rs.applymap(serialize_attr)
-    serialized_data.to_csv(file_name, encoding='utf-8')
+    rs.to_csv(file_name, encoding='utf-8')
     print 'result:', rs.shape, '->', file_name
     return rs
 
 
 def count_words(data, search):
-    if type(data) is not set: return 0
-    return len(data & search)
-
-
-def count_words_unsafe(data, search):
-    return len(data & search)
+    if type(data) is not unicode: return 0
+    return len(set(data.split(' ')) & search)
 
 
 def count_words_vectorized(s):
-    if type(s[0]) is not set: return 0
-    if type(s[1]) is not set: return 0
-    return len(s[0] & s[1])
+    if type(s[0]) is not unicode: return 0
+    if type(s[1]) is not unicode: return 0
+    return len(set(s[0].split(' ')) & set(s[1].split(' ')))
+
+
+def search_in_title(s):
+    if type(s[0]) is not unicode: return 0
+    if type(s[1]) is not unicode: return 0
+    return float(s[0] in s[1])
+
+
+def search_in_bullet(s, p_to_a):
+    if type(s[1]) is not unicode: return 0
+    return float(s[1] in p_to_a.loc[int(s[0]), 'bullet'])
 
 
 def safe_len(s):
-    if type(s) is set: return len(s)
+    if type(s) is unicode: return len(s.split(' '))
     return 0
-
-
-def internal_enrich_features(data, product_to_trace, skip_stop_words, p2a):
-    attrs_len = len(p2a.columns)
-    x = np.zeros((data.shape[0], attrs_len), dtype=np.float)
-    x_derivatives = np.zeros((data.shape[0], 4), dtype=np.float)
-    column_names = p2a.columns
-    for index, row in data.iterrows():
-        if index % 10000 == 0: print index,
-        pid = int(row['product_uid'])
-        oid = int(row['id'])
-        is_trace_enabled = pid in product_to_trace
-
-        if is_trace_enabled:
-            print
-            print 'search term', pid, '(', oid, ')', '[', row['search_term'], ']'
-        search_set, syn_set = search_transformer(row['search_term'], skip_stop_words)
-        if is_trace_enabled: print 'search set', pid, '(', oid, ')', search_set
-        if is_trace_enabled: print 'syn set', pid, '(', oid, ')', syn_set
-
-        if is_trace_enabled: print 'product title', pid, '(', oid, ')', '[', row['product_title'], ']'
-        product_title = value_transformer('product_title', row['product_title'], skip_stop_words)
-        if is_trace_enabled: print 'product title', pid, '(', oid, ')', '[', product_title, ']'
-
-        if pid in p2a.index:
-            attrs = p2a.loc[pid]
-            vals = attrs.apply(lambda d: count_words(d, search_set))
-            x[index, :attrs_len] = vals.values
-            # synonyms combo
-            x_derivatives[index, 0] += np.sum(attrs.apply(lambda d: count_words(d, syn_set)))
-
-        # title to bullet
-        x[index, 4] += count_words(product_title, search_set)
-        # title to synonyms combo
-        x_derivatives[index, 0] += count_words(product_title, syn_set)
-        x_derivatives[index, 1] = len(search_set)
-        if x_derivatives[index, 1] != 0:
-            x_derivatives[index, 2] = float(np.sum(x[index, :])) / float(len(search_set))
-
-        if is_trace_enabled:
-            print 'result', pid, '(', oid, ')'
-            print list(column_names[x[index, :] > 0])
-            print list(x[index, x[index, :] > 0])
-            print list(x_derivatives[index, :])
-
-    print
-    print 'feature prepared', x.shape, x_derivatives.shape
-    return x, x_derivatives
 
 
 def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=True, enable_stemming=True):
@@ -266,14 +198,11 @@ def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=T
     if os.path.isfile(file_name):
         print 'load', data_file, 'data from file'
         data = pd.read_csv(file_name, encoding='utf-8')
-        data['search_set'] = data['search_set'].apply(deserialize_attr)
-        data['product_title'] = data['product_title'].apply(deserialize_attr)
-        data['syn_set'] = data['syn_set'].apply(deserialize_attr)
         print 'loaded', data.shape, '->', file_name
         return data
 
     data = pd.read_csv('./dataset/' + data_file + '.csv')
-    columns = ['id', 'product_uid', 'product_title', 'search_set', 'syn_set']
+    columns = ['id', 'product_uid', 'product_title', 'search_set']
     if 'relevance' in data.columns: columns.append('relevance')
     x = DataFrame(columns=columns)
 
@@ -291,10 +220,9 @@ def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=T
         if is_trace_enabled:
             print
             print 'search term', pid, '(', oid, ')', '[', row['search_term'], ']'
-        x.at[index, 'search_set'], x.at[index, 'syn_set'] = search_transformer(row['search_term'],
-                                                                               skip_stop_words, enable_stemming)
+        x.at[index, 'search_set'] = value_transformer('search_set', row['search_term'],
+                                                      skip_stop_words, enable_stemming)
         if is_trace_enabled: print 'search set', pid, '(', oid, ')', x.at[index, 'search_set']
-        if is_trace_enabled: print 'syn set', pid, '(', oid, ')', x.at[index, 'syn_set']
 
         if is_trace_enabled: print 'product title', pid, '(', oid, ')', '[', row['product_title'], ']'
         x.at[index, 'product_title'] = value_transformer('product_title', row['product_title'],
@@ -303,10 +231,52 @@ def prepare_word_set(data_file='train', product_to_trace=None, skip_stop_words=T
 
     print
     print 'store word set'
-    x_serialized = x.applymap(serialize_attr)
-    x_serialized.to_csv(file_name, encoding='utf-8', index=None)
+    x.to_csv(file_name, encoding='utf-8', index=None)
     print 'stored', x.shape, '->', file_name
     return x
+
+
+def ration(s):
+    if s[1] == 0: return 0
+    return s[0] / s[1]
+
+
+def add_ration(features):
+    print 'process ration:', 'product_title',
+    features['product_title/ratio/'] = features[['product_title', 'search_len']].apply(ration, axis=1,
+                                                                                       reduce=True, raw=True)
+    print 'search_in_title',
+    features['search_in_title/ratio/'] = features[['product_title', 'search_len']].apply(ration, axis=1,
+                                                                                         reduce=True, raw=True)
+    print 'search_in_bullet',
+    features['search_in_bullet/ratio/'] = features[['product_title', 'search_len']].apply(ration, axis=1,
+                                                                                          reduce=True, raw=True)
+    print 'bullet'
+    features['bullet/ratio/'] = features[['product_title', 'search_len']].apply(ration, axis=1,
+                                                                                reduce=True, raw=True)
+    print 'ratio finish'
+
+
+def add_indicators(features):
+    indicators = ['combined_size', 'combined_material', 'combined_brand', 'combined_color', 'combined_weight',
+                  'combined_watt', 'combined_volt', 'combined_type']
+    print 'process indicators:',
+    for ind in indicators:
+        print ind,
+        features[ind + '/indicator/'] = features[ind].apply(lambda x: float(x > 0))
+
+
+def integrate_with_anton(features):
+    print 'integrate with anton'
+    anton_train, anton_test = load_features1()
+    if 'relevance' in features.columns:
+        anton = anton_train
+        features = features[features.columns[features.columns != 'relevance']]
+    else:
+        anton = anton_test
+    features = pd.merge(anton, features, right_on='id', left_index=True)
+    print 'finish integrating'
+    return features
 
 
 def match_features(p_to_a=None, data_file='train'):
@@ -320,42 +290,44 @@ def match_features(p_to_a=None, data_file='train'):
 
     if p_to_a is None: p_to_a = product2attrs()
     data = prepare_word_set(data_file)
+    print 'build start data frame'
     attrs = p_to_a.columns
-    columns = np.r_[['id'], attrs.values, ['product_title', 'synonyms', 'search_len']]
 
-    if 'relevance' in data.columns:
-        columns = np.r_[columns, ['relevance']]
-
-    features = DataFrame(columns=columns)
-
+    features = DataFrame(columns=attrs)
     features['id'] = data['id']
+    if 'relevance' in data.columns: features['relevance'] = data['relevance']
 
+    print 'calculate search_len'
     features['search_len'] = data['search_set'].apply(safe_len)
+    print 'calculate product_title'
     features['product_title'] = data[['product_title', 'search_set']].apply(count_words_vectorized, axis=1,
                                                                             reduce=True, raw=True)
-    features = features.fillna(0.0)
+    print 'calculate search_in_title'
+    features['search_in_title'] = data[['search_set', 'product_title']].apply(search_in_title, axis=1,
+                                                                              reduce=True, raw=True)
+    print 'calculate search_in_bullet'
+    features['search_in_bullet'] = data[['product_uid', 'search_set']].apply(lambda s: search_in_bullet(s, p_to_a)
+                                                                             , axis=1, reduce=True, raw=True)
+
     print 'process attributes'
+    features = features.fillna(0.0)
 
     tmp = np.zeros((data.shape[0], len(attrs)))
-    syn_sets = np.zeros((data.shape[0], 1))
     for index, row in data.iterrows():
         if index % 10000 == 0: print index,
         pid = row['product_uid']
         search_set = row['search_set']
-        if type(search_set) is not set: continue
+        if type(search_set) is not unicode: continue
+        search_set = set(search_set.split(' '))
         values = p_to_a.loc[pid]
         tmp[index] = values.apply(lambda d: count_words(d, search_set))
-
-        syn_set = row['syn_set']
-        if type(syn_set) is not set: continue
-        syn_sets[index] = np.sum(values.apply(lambda d: count_words(d, syn_set)))
 
     print
     print 'integrate features with attributes'
     features[attrs] = tmp
-    features['synonyms'] = syn_sets
-    if 'relevance' in features.columns:
-        features['relevance'] = data['relevance']
+    add_ration(features)
+    add_indicators(features)
+    features = integrate_with_anton(features)
     print 'store features'
     features.to_csv(file_name, index=None)
     print 'stored', features.shape, '->', file_name
@@ -397,22 +369,27 @@ def zero_normalization(features, merge=True):
 
 def fill_start_mask(mask, start_mask):
     if start_mask is None: return mask
-    file_name = './dataset/mask.' + start_mask + '.csv'
-    if not os.path.isfile(file_name): raise Exception('can not find start mask')
-    print 'load', file_name, 'data from file'
-    start_mask = pd.Series.from_csv(file_name)
-    print 'loaded', start_mask.shape, '->', file_name
-    for col in mask.index:
-        if col in start_mask.index:
-            mask[col] = start_mask[col]
-    print 'start mask applied'
+    if type(start_mask) is str:
+        file_name = './dataset/mask.' + start_mask + '.csv'
+        if not os.path.isfile(file_name): raise Exception('can not find start mask')
+        print 'load', file_name, 'data from file'
+        start_mask = pd.Series.from_csv(file_name)
+        print 'loaded', start_mask.shape, '->', file_name
+        for col in mask.index:
+            if col in start_mask.index:
+                mask[col] = start_mask[col]
+        print 'start mask applied'
+        return mask
+
+    for ix in mask.index:
+        if ix in start_mask: mask[ix] = 'F'
     return mask
 
 
 def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True), allow_merge=False, start_mask=None):
     features = features.copy(deep=True)
     file_name = './dataset/mask.' + mask_name + '.csv'
-
+    changes = 0
     if os.path.isfile(file_name):
         print 'load', file_name, 'data from file'
         mask = pd.Series.from_csv(file_name)
@@ -449,6 +426,7 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
         print 'calculated score', s,
         if s > score:
             score = s
+            changes += 1
             print 'accept feature', feature
         else:
             mask[feature] = 'D'
@@ -465,6 +443,7 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
         print 'calculated score', s,
         if s > score:
             score = s
+            changes += 1
             print 'reject feature', feature
         else:
             mask[feature] = 'F'
@@ -496,7 +475,7 @@ def select_features(mask_name, features, cls=ln.LinearRegression(normalize=True)
     result_features = features[features.columns[mask == 'F']]
     print 'store', mask.shape, '->', file_name
     mask.to_csv(file_name)
-    print 'result score', score, result_features.shape
+    print 'result score', score, result_features.shape, 'changes', changes
     return result_features
 
 
