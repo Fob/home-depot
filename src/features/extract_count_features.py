@@ -118,7 +118,7 @@ def extract_attribute_map(source_df, attr_name):
 
 
 # set of columns (processed and stemmed): title, description, brand, material, color, search_term
-def extract_process_and_save_features1():
+def extract_process_and_save_features1(file_suffix, stemming=True, skip_stop_words=True):
     start_time = datetime.datetime.now()
 
     train_data = pd.read_csv('./dataset/train.csv')
@@ -149,16 +149,16 @@ def extract_process_and_save_features1():
 
     print 'Columns collected..'
 
-    data['product_title'] = data['product_title'].map(lambda x:process_str(x, skip_stop_words=False))
-    data['descr'] = data['descr'].map(lambda x:process_str(x, skip_stop_words=False))
-    data['search_term'] = data['search_term'].map(lambda x:process_str(x, skip_stop_words=False))
+    data['product_title'] = data['product_title'].map(lambda x:process_str(x, stemming=stemming, skip_stop_words=skip_stop_words))
+    data['descr'] = data['descr'].map(lambda x:process_str(x, stemming=stemming, skip_stop_words=skip_stop_words))
+    data['search_term'] = data['search_term'].map(lambda x:process_str(x, stemming=stemming, skip_stop_words=skip_stop_words))
 
     new_train = data[:numtrain]
     new_test = data[numtrain:]
     new_test = new_test.drop('relevance', axis=1)
 
-    new_train.to_csv('./dataset/train_features_size.csv', index=None, encoding='utf-8')
-    new_test.to_csv('./dataset/test_features_size.csv', index=None, encoding='utf-8')
+    new_train.to_csv('./dataset/train_%s.csv' % file_suffix, index=None, encoding='utf-8')
+    new_test.to_csv('./dataset/test_%s.csv' % file_suffix, index=None, encoding='utf-8')
 
     print 'Processing time = ', (datetime.datetime.now() - start_time)
 
@@ -176,9 +176,9 @@ def count_common_words(str1, str2):
 #   - number of common words between search_term and product_title, product_description, brand, color, material
 #   - length of search_term
 #   - ratio of number of common words to length of search_term
-def load_features1():
-    train_new = pd.read_csv('./dataset/train_features_size.csv', index_col='id')
-    test_new = pd.read_csv('./dataset/test_features_size.csv', index_col='id')
+def load_features1(file_suffix):
+    train_new = pd.read_csv('./dataset/train_%s.csv' % file_suffix, index_col='id')
+    test_new = pd.read_csv('./dataset/test_%s.csv' % file_suffix, index_col='id')
 
     numtrain = train_new.shape[0]
     data = pd.concat([train_new, test_new], axis=0)
