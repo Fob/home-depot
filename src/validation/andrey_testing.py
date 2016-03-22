@@ -8,27 +8,28 @@ import src.features.w2v as w2v
 import pandas as pd
 
 
-train_df, test_df = ext_c_ft.load_features1()
+train_df, test_df = ext_c_ft.load_features1('features_size')
 
 # load W2V model
 w2v_wiki_model = w2v.read_w2v_model_from_text_file("/media/andrey/ARCHIVE/w2v_trained/vectors_wiki1B_skipgram_s500_w5_neg20_hs0_sam1e-4_iter5.txt")
 # ADD Word2Vec Columns
-train_data = pd.read_csv('./dataset/train_features_size.csv', index_col='id')
+train_data = pd.read_csv('./dataset/train_no_stem_no_sw.csv', index_col='id')
 
 # Cross-Validation
 scores = []
 thresholds = np.arange(5,100,5)/100.
-cv = KFold(n=len(X_train), n_folds=10, shuffle=True, random_state=23)
-for threshold in [1]:
-
-    w2v_dov_vect_features_train = w2v.get_features_sum_of_vects_as_doc(w2v_wiki_model, train_data)
-    w2v_count_synonyms_features_train = w2v.get_features_count_synonyms(w2v_wiki_model, train_data, threshold)
-    train_df[w2v_dov_vect_features_train.columns.values] = w2v_dov_vect_features_train
-    train_df[w2v_count_synonyms_features_train.columns.values] = w2v_count_synonyms_features_train
-    train_df.iloc[0]
+cv = KFold(n=len(train_df), n_folds=10, shuffle=True, random_state=23)
+for threshold in [0.5]:
 
     final_train_df = train_df
     final_train_df.iloc[10]
+
+    #w2v_doc_vect_features_train = w2v.get_features_sum_of_vects_as_doc(w2v_wiki_model, train_data)
+    #train_df[w2v_doc_vect_features_train.columns.values] = w2v_doc_vect_features_train
+
+    w2v_count_synonyms_features_train = w2v.get_features_count_synonyms(w2v_wiki_model, train_data, threshold)
+    final_train_df[w2v_count_synonyms_features_train.columns.values] = w2v_count_synonyms_features_train
+
     X_train = final_train_df.ix[:, final_train_df.columns != 'relevance'].values
     y_train = train_df['relevance'].values
 
@@ -51,7 +52,7 @@ np.sqrt((1.0/len(y_train))*np.sum((y_train-clf.predict(X_train))**2))
 
 
 # TEST OUTPUT
-test_data = pd.read_csv('./dataset/test_features_size.csv', index_col='id')
+test_data = pd.read_csv('./dataset/test_no_stem_no_sw.csv', index_col='id')
 
 w2v_dov_vect_features_test = w2v.get_features_sum_of_vects_as_doc(w2v_wiki_model, test_data)
 w2v_count_synonyms_features_test = w2v.get_features_count_synonyms(w2v_wiki_model, test_data, 0.1)
