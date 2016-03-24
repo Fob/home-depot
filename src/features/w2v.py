@@ -16,7 +16,7 @@ def get_features_sum_of_vects_as_doc_and_load_model(filename):
 
     features = pd.DataFrame({'sim_with_title_w2v': 0, 'sim_with_descr_w2v': 0}, index=data.index)
     for n in data.index:
-        if n % 1000 == 0:
+        if n % 10000 == 0:
             print "%d rows of %d processed" % (n, data.last_valid_index())
         row_n = data.loc[n]
         descr = set(row_n['descr'].split())
@@ -70,7 +70,7 @@ def get_features_sum_of_vects_as_doc(w2v_model, data):
 
     features = pd.DataFrame({'sim_with_title_w2v': 0, 'sim_with_descr_w2v': 0}, index=data.index)
     for n in data.index:
-        if n % 1000 == 0:
+        if n % 10000 == 0:
             print "%d rows of %d processed" % (n, data.last_valid_index())
         row_n = data.loc[n]
         descr = set(row_n['descr'].split())
@@ -79,22 +79,28 @@ def get_features_sum_of_vects_as_doc(w2v_model, data):
 
 
         #search vector
-        if np.sum([not term in (w2v_model) for term in search]) != 0:
+        if sum([term in (w2v_model) for term in search]) == 0:
             sim_with_title_w2v = 0
             sim_with_descr_w2v = 0
         else:
-            search_vector = sum([w2v_model[term] for term in search])/len(search)
+            vectors = [w2v_model[term] for term in search if term in w2v_model]
+            search_vector = sum(vectors, 0)/len(vectors)
+            #search_vector = sum([w2v_model[term] for term in search])/len(search)
+
             #title_vector
-            if np.sum([not term in (w2v_model) for term in title]) != 0:
+            if sum([term in (w2v_model) for term in title]) == 0:
                 sim_with_title_w2v = 0
             else:
-                title_vector = sum([w2v_model[term] for term in title])/len(title)
+                vectors = [w2v_model[term] for term in title if term in w2v_model]
+                title_vector = sum(vectors, 0)/len(vectors)
                 sim_with_title_w2v = np.dot(search_vector, title_vector)/(la.norm(search_vector)*la.norm(title_vector))
-                #descr_vector
-            if np.sum([not term in (w2v_model) for term in descr]) != 0:
+
+            #descr_vector
+            if sum([term in (w2v_model) for term in descr]) == 0:
                 sim_with_descr_w2v = 0
             else:
-                descr_vector = sum([w2v_model[term] for term in descr])/len(descr)
+                vectors = [w2v_model[term] for term in descr if term in w2v_model]
+                descr_vector = sum(vectors, 0)/len(vectors)
                 sim_with_descr_w2v = np.dot(search_vector, descr_vector)/(la.norm(search_vector)*la.norm(descr_vector))
 
 
@@ -109,10 +115,9 @@ def get_features_sum_of_vects_as_doc(w2v_model, data):
 
 def get_features_count_synonyms(w2v_model, data, threshold):
 
-
     features = pd.DataFrame({'words_in_title_w2v': 0, 'words_in_descr_w2v': 0, 'ratio_in_title_w2v': 0, 'ratio_in_descr_w2v': 0}, index=data.index)
     for n in data.index:
-        if n % 1000 == 0:
+        if n % 10000 == 0:
             print "%d rows of %d processed" % (n, data.last_valid_index())
         row_n = data.loc[n]
         descr = set(row_n['descr'].split())
