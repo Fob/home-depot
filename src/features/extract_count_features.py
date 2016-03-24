@@ -5,6 +5,7 @@ import re
 from nltk.stem.porter import *
 from nltk.corpus import stopwords
 import datetime
+from collections import Counter
 
 
 stemmer = PorterStemmer()
@@ -172,6 +173,32 @@ def count_common_words(str1, str2):
     return len(set1 & set2)
 
 
+def collect_brands():
+    brands_one_word_df = pd.read_csv('./dataset/brands_one_word.csv')
+    brands_one_word = set(brands_one_word_df["brand"].values)
+    other_brands_df = pd.read_csv('./dataset/other_brands.csv')
+    other_brands_splitted = [b.split() for b in other_brands_df["brand"].values]
+    other_brands = set([word for subl in other_brands_splitted for word in subl if len(word)>1])
+    return brands_one_word.union(other_brands)
+
+
+def collect_colors():
+    colors_df = pd.read_csv('./dataset/colors.csv')
+    return set(colors_df['color'].values)
+
+
+def collect_materials():
+    colors_df = pd.read_csv('./dataset/materials.csv')
+    return set(colors_df['material'].values)
+
+
+def get_descr_most_common_words(threshold):
+    descr_words_df = pd.read_csv('./dataset/descr_words.csv')
+    cntr = Counter(descr_words_df['word'].values)
+    freq_words = set([tpl[0] for tpl in cntr.most_common(threshold)])
+    return freq_words
+
+
 # Features:
 #   - number of common words between search_term and product_title, product_description, brand, color, material
 #   - length of search_term
@@ -185,11 +212,15 @@ def load_features1(file_suffix):
 
     new_df = pd.DataFrame({'fake': '-'}, index=data.index)
 
+    all_brands = collect_brands() - get_descr_most_common_words(1000)
+    all_colors = collect_colors()
+    all_materials = collect_materials()
+
     i = 0
     for index, row in data.iterrows():
         i += 1
-        if i % 10000 == 0:
-            print "%d rows of %d processed" % (i, data.shape[0])
+        #if i % 10000 == 0:
+        #    print "%d rows of %d processed" % (i, data.shape[0])
 
         new_df.at[index, 'words_in_title'] = count_common_words(row['product_title'], row['search_term'])
         new_df.at[index, 'words_in_descr'] = count_common_words(row['descr'], row['search_term'])
@@ -202,6 +233,17 @@ def load_features1(file_suffix):
         new_df.at[index, 'words_in_watt'] = 1 if count_common_words(row['watt'], row['search_term'])>0 else 0
         new_df.at[index, 'whole_query_in_title'] = 1 if row['search_term'] in row['product_title'] else 0
         new_df.at[index, 'whole_query_in_descr'] = 1 if row['search_term'] in row['descr'] else 0
+
+        new_df.at[index, 'brand_in_query'] = 1 if len(set(row["search_term"].split()) & all_brands) > 0 else 0
+        new_df.at[index, 'brand_in_title'] = 1 if len(set(row["product_title"].split()) & all_brands) > 0 else 0
+
+        new_df.at[index, 'color_in_query'] = 1 if len(set(row["search_term"].split()) & all_colors) > 0 else 0
+        new_df.at[index, 'color_in_title'] = 1 if len(set(row["product_title"].split()) & all_colors) > 0 else 0
+
+        new_df.at[index, 'mat_in_query'] = 1 if len(set(row["search_term"].split()) & all_materials) > 0 else 0
+        #new_df.at[index, 'mat_in_title'] = 1 if len(set(row["product_title"].split()) & all_materials) > 0 else 0
+
+        new_df.at[index, 'number_in_query'] = 1 if re.search(r'\d', row['search_term']) else 0
 
     new_df['query_len'] = data['search_term'].map(lambda x: len(x.split(" ")))
     new_df['ratio_title'] = new_df['words_in_title']/new_df['query_len']
@@ -225,5 +267,6 @@ def load_features1(file_suffix):
     #word_vec = pd.read_csv('./src/features/train_word2vec_features_title_descr.csv')
     #word_vec = word_vec.set_index(train_new_processed.index)
     #train_new_processed = pd.concat([train_new_processed, word_vec], axis=1)
+    print "features processed.."
 
     return train_new_processed, test_new_processed
