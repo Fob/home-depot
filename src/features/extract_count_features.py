@@ -246,6 +246,8 @@ def load_features1(file_suffix):
         new_df.at[index, 'number_in_query'] = 1 if re.search(r'\d', row['search_term']) else 0
 
     new_df['query_len'] = data['search_term'].map(lambda x: len(x.split(" ")))
+    new_df['title_len'] = data['product_title'].map(lambda x: len(x.split(" ")))
+    new_df['descr_len'] = data['descr'].map(lambda x: len(x.split(" ")))
     new_df['ratio_title'] = new_df['words_in_title']/new_df['query_len']
     new_df['ratio_descr'] = new_df['words_in_descr']/new_df['query_len']
     #new_df['ratio_brand'] = new_df['words_in_brand']/new_df['query_len']
