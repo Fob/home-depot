@@ -6,6 +6,7 @@ from nltk.stem.porter import *
 from nltk.corpus import stopwords
 import datetime
 from collections import Counter
+import ngram
 
 
 stemmer = PorterStemmer()
@@ -118,6 +119,7 @@ def extract_attribute_map(source_df, attr_name):
     return attrs_df.groupby('product_uid')['value'].apply(lambda x: ' '.join(x.unique()))
 
 
+from spell_check_dict import spell_check_dict
 # set of columns (processed and stemmed): title, description, brand, material, color, search_term
 def extract_process_and_save_features1(file_suffix, stemming=True, skip_stop_words=True):
     start_time = datetime.datetime.now()
@@ -152,6 +154,7 @@ def extract_process_and_save_features1(file_suffix, stemming=True, skip_stop_wor
 
     data['product_title'] = data['product_title'].map(lambda x:process_str(x, stemming=stemming, skip_stop_words=skip_stop_words))
     data['descr'] = data['descr'].map(lambda x:process_str(x, stemming=stemming, skip_stop_words=skip_stop_words))
+    data['search_term'] = data['search_term'].apply(lambda x: spell_check_dict[x] if x in spell_check_dict else x)
     data['search_term'] = data['search_term'].map(lambda x:process_str(x, stemming=stemming, skip_stop_words=skip_stop_words))
 
     new_train = data[:numtrain]
