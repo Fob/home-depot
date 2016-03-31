@@ -1,5 +1,5 @@
 from matplotlib import pyplot as plt
-import src.features.extract_count_features as ext_c_ft
+#import src.features.extract_count_features as ext_c_ft
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.cross_validation import KFold
 from sklearn.cross_validation import cross_val_score
@@ -9,17 +9,20 @@ import src.features.w2v as w2v
 import pandas as pd
 
 
-#train_df, test_df = ext_c_ft.load_features1('features_size')
+#train_df, test_df = ext_c_ft.load_features1('no_stem_no_sw_spell_check')
+#train_df.to_csv('./src/features/builded_cnt_features_from_train_no_stem_no_sw_spell_check.csv', header=True)
+#test_df.to_csv('./src/features/builded_cnt_features_from_test_no_stem_no_sw_spell_check.csv', header=True)
 
+#train_df = pd.read_csv('./src/features/builded_cnt_features_from_train_no_stem_no_sw_spell_check.csv', index_col='id')
 train_df = pd.read_csv('./src/features/builded_from_loadfeztures1_train.csv', index_col='id')
 
 
 # load W2V model
 w2v_wiki_model = w2v.read_w2v_model_from_text_file("/media/andrey/ARCHIVE/w2v_trained/vectors_wiki1B_skipgram_s500_w5_neg20_hs0_sam1e-4_iter5.txt")
 # load W2V model
-w2v_descr_title_model = w2v.read_w2v_model_from_text_file("/home/andrey/Kaggle/home-depot/dataset/all_text_w2v_model")
+w2v_descr_title_model = w2v.read_w2v_model_from_text_file("/home/andrey/Kaggle/home-depot/dataset/w2v_model_all_text_spell_check")
 # ADD Word2Vec Columns
-train_data = pd.read_csv('./dataset/train_no_stem_no_sw.csv', index_col='id')
+train_data = pd.read_csv('./dataset/train_no_stem_no_sw_spell_check.csv', index_col='id')
 
 w2v_doc_vect_features_train = w2v.get_features_sum_of_vects_as_doc_fast_method(w2v_wiki_model, train_data)
 
@@ -57,11 +60,11 @@ for threshold in thresholds:
     scores = np.append(scores, score.mean())
     print 'CV score = %f for %f threshold' % (score.mean(), threshold)
 
-plt.plot(np.array(thresholds), scores)
-plt.show()
+#plt.plot(np.array(thresholds), scores)
+#plt.show()
 
-out = pd.DataFrame({'scores': scores})
-out.to_csv('./result/scores.csv', index=None)
+#out = pd.DataFrame({'scores': scores})
+#out.to_csv('./result/scores.csv', index=None)
 
 # TRAIN ALL
 #----------------------------------------------------
@@ -83,19 +86,19 @@ final_train_df[cnt_in_titledescr.columns.values] = cnt_in_titledescr
 
 X_train = final_train_df.drop('relevance', axis=1).values
 y_train = final_train_df['relevance'].values
-clf = RandomForestRegressor(n_estimators=500, n_jobs=-1, random_state=42, max_depth=10, max_features=4)
+clf = RandomForestRegressor(n_estimators=500, n_jobs=-1, max_depth=10, max_features=4)
 clf.fit(X_train, y_train)
-np.sqrt((1.0/len(y_train))*np.sum((y_train-clf.predict(X_train))**2))
-out = final_train_df[['sim_with_title_w2v', 'sim_with_descr_w2v', 'sim_with_title_w2v_title_descr', 'sim_with_descr_w2v_title_descr', 'cnt_in_title', 'cnt_in_descr']]
+print np.sqrt((1.0/len(y_train))*np.sum((y_train-clf.predict(X_train))**2))
 
-out.to_csv('./src/features/w2v_wiki_and_descr_without_typos_train_features.csv', index=None)
+#w2v_features = final_train_df[['sim_with_title_w2v', 'sim_with_descr_w2v', 'sim_with_title_w2v_title_descr', 'sim_with_descr_w2v_title_descr']]
+#w2v_features.to_csv('./src/features/w2v_features_train.csv')
 #----------------------------------------------------
 
 
 # TEST OUTPUT
 #----------------------------------------------------
 test_df = pd.read_csv('./src/features/builded_from_loadfeztures1_test.csv', index_col='id')
-test_data = pd.read_csv('./dataset/test_no_stem_no_sw.csv', index_col='id')
+test_data = pd.read_csv('./dataset/test_no_stem_no_sw_spell_check.csv', index_col='id')
 final_test_df = test_df.copy()
 
 #on w2v wiki
@@ -112,11 +115,14 @@ final_test_df[cnt_in_titledescr_test.columns.values] = cnt_in_titledescr_test
 #w2v_count_synonyms_features_test = w2v.get_features_count_synonyms(w2v_wiki_model, test_data, threshold)
 #final_test_df[w2v_count_synonyms_features_test.columns.values] = w2v_count_synonyms_features_test
 
+#w2v_features = final_test_df[['sim_with_title_w2v', 'sim_with_descr_w2v', 'sim_with_title_w2v_title_descr', 'sim_with_descr_w2v_title_descr']]
+#w2v_features.to_csv('./src/features/w2v_features_test.csv')
+
 
 X_test = final_test_df.values
 y_test = clf.predict(X_test)
 out = pd.DataFrame({'id': test_df.index, 'relevance': y_test})
-out.to_csv('./result/w2v_wiki_and_descr.csv', index=None)
+out.to_csv('./result/w2v_wiki_and_descr_spell_check.csv', index=None)
 #----------------------------------------------------
 
 
@@ -126,10 +132,11 @@ out.to_csv('./result/w2v_wiki_and_descr.csv', index=None)
 #TEST NEW FUNCTIONALITY
 #----------------------------------------------------
 train_data = pd.read_csv('./dataset/train_no_stem_no_sw.csv', index_col='id')
+test_data = pd.read_csv('./dataset/test_no_stem_no_sw.csv', index_col='id')
 
 
-with open('./dataset/titles.txt', 'a') as f:
-    train_data['product_title'].to_csv(f, index=None, header=False)
+with open('./dataset/all_text_train_and_test.txt', 'a') as f:
+    test_data['descr'].to_csv(f, index=None, header=False)
 #train_data['product_title'][1:10].to_csv('./dataset/all_text.txt', index=None)
 
 
