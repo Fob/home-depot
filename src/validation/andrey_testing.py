@@ -126,7 +126,41 @@ out.to_csv('./result/w2v_wiki_and_descr_spell_check.csv', index=None)
 #----------------------------------------------------
 
 
+#----------------------------------------------------
+#TEST TF-IDF
+#----------------------------------------------------
 
+
+train_data = pd.read_csv('./dataset/train_spell_check.csv', index_col='id')
+train_data.iloc[1]
+train_data = train_data[['product_title']]
+
+test_data = pd.read_csv('./dataset/test_spell_check.csv', index_col='id')
+test_data.iloc[1]
+test_data = test_data[['product_title']]
+
+all_data = pd.concat([train_data, test_data], axis=0)
+
+
+all_docs = list(all_data.values.reshape((1,len(all_data)))[0])
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+vectorizer = TfidfVectorizer()
+vectorizer.fit(all_docs)
+X = vectorizer.transform(all_docs)
+
+train_data = pd.read_csv('./dataset/train_spell_check.csv', index_col='id')
+search = train_data['search_term']
+title = train_data['product_title']
+
+vect_search = vectorizer.transform(search)
+vect_title = vectorizer.transform(title)
+
+matrix_search_title_tfidf = np.multiply(vect_search.todense(), vect_title.todense())
+feature_s_title_tfidf = np.sum(matrix_search_title_tfidf, axis=1)
+out = pd.DataFrame(feature_s_title_tfidf)
+out.columns = ['search_title_tfidf']
+out.to_csv('./src/features/feature_search_title_tfidf.csv', index=None)
 
 #----------------------------------------------------
 #TEST NEW FUNCTIONALITY
