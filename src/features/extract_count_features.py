@@ -219,24 +219,34 @@ def collect_ngram_features(source_df):
     for col_name in column_names:
         df['%s_bigram' % col_name] = list(df[col_name].apply(lambda x: ngram.getBigram(x.split(), '_')))
         df['%s_trigram' % col_name] = list(df[col_name].apply(lambda x: ngram.getTrigram(x.split(), '_')))
+    df['search_term_biterm'] = list(df['search_term'].apply(lambda x: ngram.getBiterm(x.split(), '_')))
+
+    print "Bigrams collected"
 
     # Count features
     for col_name in column_names:
         for gram in grams:
             df['count_of_%s_%s' % (col_name, gram)] = df[col_name+'_'+gram].apply(lambda x: len(x))
-            df['count_of_unique_%s_%s' % (col_name, gram)] = df[col_name+'_'+gram].apply(lambda x: len(set(x)))
-            df['ratio_of_unique_%s_%s' % (col_name, gram)] = map(try_divide, df['count_of_unique_%s_%s' % (col_name, gram)], df['count_of_%s_%s' % (col_name, gram)])
+            #df['count_of_unique_%s_%s' % (col_name, gram)] = df[col_name+'_'+gram].apply(lambda x: len(set(x)))
+            #df['ratio_of_unique_%s_%s' % (col_name, gram)] = map(try_divide, df['count_of_unique_%s_%s' % (col_name, gram)], df['count_of_%s_%s' % (col_name, gram)])
+    df['count_of_search_term_biterm'] = df['search_term_biterm'].apply(lambda x: len(x))
 
-    for gram in grams:
-        for feat in ['product_title', 'descr']:
-            df['count_of_search_term_%s_in_%s'%(gram,feat)] = \
-                df.apply(lambda x: sum([1. for w in x["search_term_"+gram] if w in set(x[feat+"_"+gram])]), axis=1)
-            df["ratio_of_search_term_%s_in_%s"%(gram,feat)] = \
-                map(try_divide, df['count_of_search_term_%s_in_%s'%(gram,feat)], df["count_of_search_term_%s"%gram])
+    print "Count bigrams done"
+
+    for feat in ['product_title', 'descr']:
+        df['count_of_search_term_bigram_in_%s'%feat] = \
+            df.apply(lambda x: sum([1. for w in x["search_term_bigram"] if w in set(x[feat+"_bigram"])]), axis=1)
+        #df["ratio_of_search_term_%s_in_%s"%(gram,feat)] = \
+        #    map(try_divide, df['count_of_search_term_%s_in_%s'%(gram,feat)], df["count_of_search_term_%s"%gram])
+        df['count_of_search_term_biterm_in_%s'%feat] = \
+            df.apply(lambda x: sum([1. for w in x["search_term_biterm"] if w in set(x[feat+"_bigram"])]), axis=1)
+
+    print "coocurrence collected"
 
     for col_name in column_names:
         df = df.drop('%s_bigram'%col_name, axis=1)
         df = df.drop('%s_trigram'%col_name, axis=1)
+    df = df.drop('search_term_biterm', axis=1)
 
     return df.drop(column_names, axis=1)
 
@@ -302,7 +312,7 @@ def load_features1(file_suffix):
 
     print "Collecting n-gram features..."
     gram_features = collect_ngram_features(data)
-    gram_features = gram_features[['count_of_search_term_bigram','count_of_search_term_trigram','count_of_search_term_bigram_in_product_title']]
+    gram_features = gram_features[['count_of_search_term_bigram','count_of_search_term_trigram','count_of_search_term_biterm','count_of_search_term_bigram_in_product_title','count_of_search_term_biterm_in_product_title']]
     #print gram_features.columns.values
     new_df[gram_features.columns.values] = gram_features
 

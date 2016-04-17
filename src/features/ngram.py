@@ -27,6 +27,21 @@ def getBigram(words, join_string, skip=0):
     return lst
 
 
+def getBiterm(words, join_string, skip=0):
+    assert type(words) == list
+    L = len(words)
+    if L > 1:
+        lst = []
+        for i in range(L):
+            for k in range(L):
+                if i != k:
+                    lst.append(join_string.join([words[i], words[k]]))
+    else:
+        # set it as unigram
+        lst = getUnigram(words)
+    return lst
+
+
 def getTrigram(words, join_string, skip=0):
     """
        Input: a list of words, e.g., ['I', 'am', 'Denny']
