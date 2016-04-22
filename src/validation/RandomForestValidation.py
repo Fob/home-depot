@@ -52,3 +52,4 @@ print 'cross validation score', cross_validation.cross_val_score(
 # -0.490441847191
 # -0.49004546468
 # -0.483139294024
+# -0.482038088824

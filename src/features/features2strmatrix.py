@@ -268,7 +268,7 @@ def add_indicators(features):
 
 def integrate_with_anton(features):
     print 'integrate with anton'
-    anton_train, anton_test = load_features1()
+    anton_train, anton_test = load_features1('features_size')
     if 'relevance' in features.columns:
         anton = anton_train
         features = features[features.columns[features.columns != 'relevance']]

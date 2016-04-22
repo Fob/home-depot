@@ -202,6 +202,55 @@ def get_descr_most_common_words(threshold):
     return freq_words
 
 
+def try_divide(x, y, val=0.0):
+    """
+        Try to divide two numbers
+    """
+    if y != 0.0:
+        val = float(x) / y
+    return val
+
+
+def collect_ngram_features(source_df):
+    column_names = ['search_term', 'product_title', 'descr']
+    df = source_df[column_names].copy()
+
+    grams = ['bigram', 'trigram']
+    for col_name in column_names:
+        df['%s_bigram' % col_name] = list(df[col_name].apply(lambda x: ngram.getBigram(x.split(), '_')))
+        df['%s_trigram' % col_name] = list(df[col_name].apply(lambda x: ngram.getTrigram(x.split(), '_')))
+    df['search_term_biterm'] = list(df['search_term'].apply(lambda x: ngram.getBiterm(x.split(), '_')))
+
+    print "Bigrams collected"
+
+    # Count features
+    for col_name in column_names:
+        for gram in grams:
+            df['count_of_%s_%s' % (col_name, gram)] = df[col_name+'_'+gram].apply(lambda x: len(x))
+            #df['count_of_unique_%s_%s' % (col_name, gram)] = df[col_name+'_'+gram].apply(lambda x: len(set(x)))
+            #df['ratio_of_unique_%s_%s' % (col_name, gram)] = map(try_divide, df['count_of_unique_%s_%s' % (col_name, gram)], df['count_of_%s_%s' % (col_name, gram)])
+    df['count_of_search_term_biterm'] = df['search_term_biterm'].apply(lambda x: len(x))
+
+    print "Count bigrams done"
+
+    for feat in ['product_title', 'descr']:
+        df['count_of_search_term_bigram_in_%s'%feat] = \
+            df.apply(lambda x: sum([1. for w in x["search_term_bigram"] if w in set(x[feat+"_bigram"])]), axis=1)
+        #df["ratio_of_search_term_%s_in_%s"%(gram,feat)] = \
+        #    map(try_divide, df['count_of_search_term_%s_in_%s'%(gram,feat)], df["count_of_search_term_%s"%gram])
+        df['count_of_search_term_biterm_in_%s'%feat] = \
+            df.apply(lambda x: sum([1. for w in x["search_term_biterm"] if w in set(x[feat+"_bigram"])]), axis=1)
+
+    print "coocurrence collected"
+
+    for col_name in column_names:
+        df = df.drop('%s_bigram'%col_name, axis=1)
+        df = df.drop('%s_trigram'%col_name, axis=1)
+    df = df.drop('search_term_biterm', axis=1)
+
+    return df.drop(column_names, axis=1)
+
+
 # Features:
 #   - number of common words between search_term and product_title, product_description, brand, color, material
 #   - length of search_term
@@ -222,8 +271,8 @@ def load_features1(file_suffix):
     i = 0
     for index, row in data.iterrows():
         i += 1
-        #if i % 10000 == 0:
-        #    print "%d rows of %d processed" % (i, data.shape[0])
+        if i % 10000 == 0:
+            print "%d rows of %d processed" % (i, data.shape[0])
 
         new_df.at[index, 'words_in_title'] = count_common_words(row['product_title'], row['search_term'])
         new_df.at[index, 'words_in_descr'] = count_common_words(row['descr'], row['search_term'])
@@ -261,6 +310,12 @@ def load_features1(file_suffix):
     #new_df['ratio_volt'] = new_df['words_in_volt']/new_df['query_len']
     #new_df['ratio_watt'] = new_df['words_in_watt']/new_df['query_len']
 
+    print "Collecting n-gram features..."
+    gram_features = collect_ngram_features(data)
+    gram_features = gram_features[['count_of_search_term_bigram','count_of_search_term_trigram','count_of_search_term_biterm','count_of_search_term_bigram_in_product_title','count_of_search_term_biterm_in_product_title']]
+    #print gram_features.columns.values
+    new_df[gram_features.columns.values] = gram_features
+
     new_df = new_df.drop('fake', axis=1)
 
     train_new_processed = new_df[:numtrain].copy()
@@ -272,6 +327,6 @@ def load_features1(file_suffix):
     #word_vec = pd.read_csv('./src/features/train_word2vec_features_title_descr.csv')
     #word_vec = word_vec.set_index(train_new_processed.index)
     #train_new_processed = pd.concat([train_new_processed, word_vec], axis=1)
-    print "features processed.."
+    print "Features processed"
 
     return train_new_processed, test_new_processed

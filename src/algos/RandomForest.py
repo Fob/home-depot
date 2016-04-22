@@ -46,3 +46,4 @@ out = pd.DataFrame({'id': features_validated['id'], 'relevance': y_test})
 out.to_csv('./result/random_forest_regression.csv', index=None)
 print 'saved ./result/random_forest_regression.csv'
 # 0.52430
+# 0.48455
