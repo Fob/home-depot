@@ -229,3 +229,47 @@ w2v_descr_model = w2v.read_w2v_model_from_text_file("/home/andrey/word2vec/home-
 word='makita'
 w2v.cos_sim(w2v_wiki_model[word], w2v_descr_model[word])
 
+
+
+
+
+
+
+import numpy as np
+import random
+N = 20
+dimensions = [10, 5, 10]
+data = np.random.randn(N, dimensions[0])   # each row will be a datum
+labels = np.zeros((N, dimensions[2]))
+for i in xrange(N):
+    labels[i,random.randint(0,dimensions[2]-1)] = 1
+
+params = np.random.randn((dimensions[0] + 1) * dimensions[1] + (dimensions[1] + 1) * dimensions[2], )
+
+
+i=2
+m = data.shape[0]
+a1 = np.hstack((data, np.zeros((m,1)))).transpose()
+W1_with_b = np.vstack((W1, b1)).transpose()
+z2 = np.dot(W1_with_b, a1)
+a2 = sigmoid(z2)
+
+a2 = np.vstack((a2, np.zeros((1,m))))
+W2_with_b = np.vstack((W2, b2)).transpose()
+z3 = np.dot(W2_with_b, a2)
+a3 = softmax(z3.transpose())
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
