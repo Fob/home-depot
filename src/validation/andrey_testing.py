@@ -131,40 +131,85 @@ out.to_csv('./result/w2v_wiki_and_descr_spell_check.csv', index=None)
 #----------------------------------------------------
 
 
-train_data = pd.read_csv('./dataset/train_spell_check.csv', index_col='id')
+train_data = pd.read_csv('./dataset/spell_check/train_spell_check.csv', index_col='id')
 train_data.iloc[1]
-train_data = train_data[['descr']]
+train_descr = train_data[['descr']]
+train_title = train_data[['product_title']]
+train_search = train_data[['search_term']]
 
-test_data = pd.read_csv('./dataset/test_spell_check.csv', index_col='id')
+test_data = pd.read_csv('./dataset/spell_check/test_spell_check.csv', index_col='id')
 test_data.iloc[1]
-test_data = test_data[['descr']]
+test_descr = test_data[['descr']]
+test_title = test_data[['product_title']]
+test_search = test_data[['search_term']]
 
-all_data = pd.concat([train_data, test_data], axis=0)
+all_descr_data = pd.concat([train_descr, test_descr], axis=0)
+all_title_data = pd.concat([train_title, test_title], axis=0)
 
 
-all_docs = list(all_data.values.reshape((1,len(all_data)))[0])
-
+all_title_docs = list(all_title_data.values.reshape((1,len(all_title_data)))[0])
 from sklearn.feature_extraction.text import TfidfVectorizer
-vectorizer = TfidfVectorizer()
-vectorizer.fit(all_docs)
-#X = vectorizer.transform(all_docs)
+vectorizer_title = TfidfVectorizer()
+vectorizer_title.fit(all_title_docs)
 
-train_data = pd.read_csv('./dataset/train_spell_check.csv', index_col='id')
+all_descr_docs = list(all_descr_data.values.reshape((1,len(all_descr_data)))[0])
+vectorizer_descr = TfidfVectorizer()
+vectorizer_descr.fit(all_descr_docs)
+
+#train_data = pd.read_csv('./dataset/spell_check/train_spell_check.csv', index_col='id')
+train_data = pd.read_csv('./dataset/spell_check/test_spell_check.csv', index_col='id')
 search = train_data['search_term']
-title = train_data['descr']
+title = train_data['product_title']
+descr = train_data['descr']
 
 print "transform..."
-vect_search = vectorizer.transform(search)
-vect_title = vectorizer.transform(title)
+vect_t_search = vectorizer_title.transform(search)
+vect_title = vectorizer_title.transform(title)
+vect_d_search = vectorizer_descr.transform(search)
+vect_descr = vectorizer_descr.transform(descr)
 print "end transform"
 
-#matrix_search_title_tfidf = np.multiply(vect_search.todense(), vect_title.todense())
-matrix_search_title_tfidf = vect_search.multiply(vect_title).todense()
-feature_s_title_tfidf = np.sum(matrix_search_title_tfidf, axis=1)
+def sparse_max_row(csr_mat):
+    ret = np.maximum.reduceat(csr_mat.data, csr_mat.indptr[:-1])
+    ret[np.diff(csr_mat.indptr) == 0] = 0
+    return ret
+def sparse_min_row(csr_mat):
+    ret = np.minimum.reduceat(csr_mat.data, csr_mat.indptr[:-1])
+    ret[np.diff(csr_mat.indptr) == 0] = 0
+    return ret
+
+
+#title
+matrix_search_title_tfidf = vect_t_search.multiply(vect_title).todense()
+matrix_search_title_tfidf = vect_t_search.multiply(vect_title)
+
+
+feature_s_title_tfidf_sum = np.array(matrix_search_title_tfidf.sum(axis=1).reshape(len(train_data)))[0]
+#feature_s_title_tfidf_avg = np.array(matrix_search_title_tfidf.mean(axis=1).reshape(len(train_data)))[0]
+feature_s_title_tfidf_max = sparse_max_row(matrix_search_title_tfidf)
+feature_s_title_tfidf_min = sparse_min_row(matrix_search_title_tfidf)
 print "feature created"
-out = pd.DataFrame(feature_s_title_tfidf)
-out.columns = ['search_descr_tfidf']
-out.to_csv('./src/features/feature_search_descr_tfidf.csv', index=None)
+out = pd.DataFrame(feature_s_title_tfidf_sum)
+out.columns = ['search_title_tfidf_sum']
+out['search_title_tfidf_min'] = feature_s_title_tfidf_min
+out['search_title_tfidf_max'] = feature_s_title_tfidf_max
+#out['search_title_tfidf_avg'] = feature_s_title_tfidf_avg
+
+#description
+
+matrix_search_descr_tfidf = vect_d_search.multiply(vect_descr)
+
+feature_s_descr_tfidf_sum = np.array(matrix_search_descr_tfidf.sum(axis=1).reshape(len(train_data)))[0]
+#feature_s_title_tfidf_avg = np.array(matrix_search_title_tfidf.mean(axis=1).reshape(len(train_data)))[0]
+feature_s_descr_tfidf_max = sparse_max_row(matrix_search_descr_tfidf)
+feature_s_descr_tfidf_min = sparse_min_row(matrix_search_descr_tfidf)
+print "feature created"
+out['search_descr_tfidf_sum'] = feature_s_descr_tfidf_sum
+out['search_descr_tfidf_min'] = feature_s_descr_tfidf_min
+out['search_descr_tfidf_max'] = feature_s_descr_tfidf_max
+#out['search_title_tfidf_avg'] = feature_s_title_tfidf_avg
+
+out.to_csv('./src/features/tfidf_features_test.csv', index=None)
 print "finished"
 
 #----------------------------------------------------
