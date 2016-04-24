@@ -24,21 +24,13 @@ logging.root.setLevel(level=logging.INFO)
 def keras_calc(X_train, y_train, X_test):
     model = Sequential()
     # 2 inputs, 10 neurons in 1 hidden layer, with tanh activation and dropout
-    model.add(Dense(300, init='uniform', input_dim=38))
+    model.add(Dense(30, init='uniform', input_dim=38))
     model.add(Activation('tanh'))
-    model.add(Dropout(0.50))
+    model.add(Dropout(0.25))
 
-    model.add(Dense(300, init='uniform'))
+    model.add(Dense(30, init='uniform'))
     model.add(Activation('sigmoid'))
-    model.add(Dropout(0.50))
-
-    model.add(Dense(300, init='uniform'))
-    model.add(Activation('relu'))
-    model.add(Dropout(0.50))
-
-    model.add(Dense(300, init='uniform'))
-    model.add(Activation('tanh'))
-    model.add(Dropout(0.50))
+    model.add(Dropout(0.25))
 
 
     # 1 output, linear activation
@@ -46,7 +38,7 @@ def keras_calc(X_train, y_train, X_test):
     model.add(Activation('linear'))
     model.compile(loss='mse', optimizer='rmsprop')
 
-    model.fit(X_train, y_train, nb_epoch=100, batch_size=32)
+    model.fit(X_train, y_train, nb_epoch=50, batch_size=32)
     y_predicted = model.predict(X_train, 32)
 
     y_predicted[y_predicted < 1] = 1
