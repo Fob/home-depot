@@ -268,7 +268,8 @@ def add_indicators(features):
 
 def integrate_with_anton(features):
     print 'integrate with anton'
-    anton_train, anton_test = load_features1('features_size')
+    anton_train = pd.read_csv('./dataset/good_ft_2_train.csv', index_col='id')
+    anton_test = pd.read_csv('./dataset/good_ft_2_test.csv', index_col='id')
     if 'relevance' in features.columns:
         anton = anton_train
         features = features[features.columns[features.columns != 'relevance']]
